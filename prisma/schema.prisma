@@ -1,0 +1,122 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Message {
+  id          String   @id @default(uuid())
+  externalId  String   @unique
+  channel     String   // gmail, whatsapp, telegram, slack
+  from        String
+  to          String
+  subject     String?
+  body        String
+  timestamp   DateTime
+  read        Boolean  @default(false)
+  priority    Int      @default(50) // 1-100
+  aiDraft     String?
+  threadId    String?
+  contactId   String?
+  metadata    String?  // JSON stored as string
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  contact     Contact?    @relation(fields: [contactId], references: [id])
+  conversation Conversation? @relation(fields: [threadId], references: [id])
+  aiMetadata  AIMetadata?
+
+  @@index([channel])
+  @@index([contactId])
+  @@index([threadId])
+  @@index([priority])
+  @@index([timestamp])
+  @@index([read])
+}
+
+model Contact {
+  id                  String    @id @default(uuid())
+  name                String
+  email               String?   @unique
+  phone               String?
+  slackId             String?
+  telegramId          String?
+  whatsappId          String?
+  avatar              String?
+  personalityProfile  String?   // text description
+  relationshipScore   Int       @default(50) // 1-100
+  lastContactDate     DateTime?
+  businessEntity      String?
+  notes               String?
+  metadata            String?   // JSON stored as string
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  messages            Message[]
+  conversations       Conversation[]
+  calendarEvents      CalendarEvent[]
+
+  @@index([email])
+  @@index([relationshipScore])
+}
+
+model Conversation {
+  id                      String    @id @default(uuid())
+  title                   String
+  channel                 String
+  contactId               String?
+  lastMessageAt           DateTime
+  unreadCount             Int       @default(0)
+  priority                Int       @default(50) // 1-100
+  linkedConversationIds   String?   // JSON array stored as string
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  contact                 Contact?  @relation(fields: [contactId], references: [id])
+  messages                Message[]
+
+  @@index([channel])
+  @@index([contactId])
+  @@index([lastMessageAt])
+  @@index([priority])
+}
+
+model CalendarEvent {
+  id          String    @id @default(uuid())
+  title       String
+  startTime   DateTime
+  endTime     DateTime
+  attendees   String?   // JSON array stored as string
+  contactId   String?
+  briefing    String?   // text
+  location    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  contact     Contact?  @relation(fields: [contactId], references: [id])
+
+  @@index([startTime])
+  @@index([contactId])
+}
+
+model AIMetadata {
+  id              String   @id @default(uuid())
+  messageId       String   @unique
+  priorityScore   Int
+  priorityReason  String
+  draftReply      String?
+  sentiment       String?  // positive, negative, neutral
+  topics          String?  // JSON array stored as string
+  actionItems     String?  // JSON array stored as string
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  message         Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([priorityScore])
+}
