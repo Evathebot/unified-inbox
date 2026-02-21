@@ -1,13 +1,12 @@
-'use client';
-
 import { AlertCircle, Clock, Calendar, CheckSquare, TrendingUp } from 'lucide-react';
 import BriefingCard from '@/components/BriefingCard';
 import MessageCard from '@/components/MessageCard';
 import CalendarEventCard from '@/components/CalendarEvent';
-import { mockBriefing } from '@/lib/mockData';
+import { getBriefing } from '@/lib/data';
 
-export default function BriefingPage() {
-  const briefing = mockBriefing;
+export default async function BriefingPage() {
+  // Fetch data from database with fallback to mock data
+  const briefing = await getBriefing();
 
   return (
     <div className="min-h-screen p-6">
@@ -131,12 +130,14 @@ export default function BriefingPage() {
                 Most productive hours are between 9-11 AM.
               </p>
               <p className="leading-relaxed">
-                🎯 <strong>Focus Recommendation:</strong> Sarah Chen's budget approval (priority: 95) 
-                requires attention before tomorrow's board meeting.
+                🎯 <strong>Focus Recommendation:</strong> {briefing.priorityMessages.length > 0 
+                  ? `${briefing.priorityMessages[0].sender.name}'s message (priority: ${briefing.priorityMessages[0].priority}) requires attention.`
+                  : 'No high-priority items at this time.'}
               </p>
               <p className="leading-relaxed">
-                💡 <strong>Relationship Tip:</strong> You haven't contacted Emily Foster in 3 days. 
-                She typically prefers updates every 2-3 days on active projects.
+                💡 <strong>Relationship Tip:</strong> {briefing.overdueReplies.length > 0
+                  ? `You have ${briefing.overdueReplies.length} overdue ${briefing.overdueReplies.length === 1 ? 'reply' : 'replies'}. Consider reaching out soon.`
+                  : 'You\'re all caught up on your communications!'}
               </p>
             </div>
           </BriefingCard>

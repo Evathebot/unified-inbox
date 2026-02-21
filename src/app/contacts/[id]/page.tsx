@@ -1,17 +1,21 @@
-'use client';
-
-import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Mail, Phone, Video } from 'lucide-react';
 import GlassCard from '@/components/GlassCard';
 import ChannelBadge from '@/components/ChannelBadge';
 import PersonalityProfile from '@/components/PersonalityProfile';
 import MessageCard from '@/components/MessageCard';
-import { mockContacts, mockMessages, getRelativeTime } from '@/lib/mockData';
+import { getContactWithPersonality, getMessages } from '@/lib/data';
+import { getRelativeTime } from '@/lib/mockData';
 
-export default function ContactProfilePage() {
-  const params = useParams();
-  const contact = mockContacts.find(c => c.id === params.id);
+interface ContactProfilePageProps {
+  params: Promise<{ id: string }>;
+}
+
+export default async function ContactProfilePage({ params }: ContactProfilePageProps) {
+  const { id } = await params;
+  
+  // Fetch contact and their messages from database with fallback to mock data
+  const contact = await getContactWithPersonality(id);
 
   if (!contact) {
     return (
@@ -22,9 +26,8 @@ export default function ContactProfilePage() {
   }
 
   // Get messages from this contact
-  const contactMessages = mockMessages.filter(
-    m => m.sender.name === contact.name
-  );
+  const allMessages = await getMessages();
+  const contactMessages = allMessages.filter((m) => m.sender.name === contact.name);
 
   return (
     <div className="min-h-screen p-6">
@@ -117,7 +120,7 @@ export default function ContactProfilePage() {
                 <div className="flex justify-between">
                   <span className="text-gray-400 text-sm">Unread Messages</span>
                   <span className="text-white font-semibold">
-                    {contactMessages.filter(m => m.unread).length}
+                    {contactMessages.filter((m) => m.unread).length}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -132,7 +135,7 @@ export default function ContactProfilePage() {
           <div className="lg:col-span-2">
             <GlassCard className="p-6">
               <h2 className="text-xl font-bold text-white mb-4">Recent Conversations</h2>
-              
+
               {contactMessages.length > 0 ? (
                 <div className="space-y-3">
                   {contactMessages.map((message) => (
@@ -140,9 +143,7 @@ export default function ContactProfilePage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-gray-400 text-center py-8">
-                  No recent conversations
-                </p>
+                <p className="text-gray-400 text-center py-8">No recent conversations</p>
               )}
             </GlassCard>
           </div>
