@@ -7,14 +7,23 @@ import MessageCard from '@/components/MessageCard';
 import { getContactWithPersonality, getMessages } from '@/lib/data';
 import { getRelativeTime } from '@/lib/mockData';
 
+// Platform icon mapping
+const platformIcons: Record<string, { label: string; color: string }> = {
+  gmail: { label: 'M', color: 'text-red-500 bg-red-50' },
+  instagram: { label: '📷', color: 'text-pink-500 bg-pink-50' },
+  slack: { label: '#', color: 'text-purple-700 bg-purple-50' },
+  whatsapp: { label: '💬', color: 'text-green-500 bg-green-50' },
+  linkedin: { label: 'in', color: 'text-blue-700 bg-blue-50' },
+  telegram: { label: '✈', color: 'text-blue-500 bg-blue-50' },
+  twitter: { label: '𝕏', color: 'text-gray-900 bg-gray-100' },
+};
+
 interface ContactProfilePageProps {
   params: Promise<{ id: string }>;
 }
 
 export default async function ContactProfilePage({ params }: ContactProfilePageProps) {
   const { id } = await params;
-  
-  // Fetch contact and their messages from database with fallback to mock data
   const contact = await getContactWithPersonality(id);
 
   if (!contact) {
@@ -25,125 +34,132 @@ export default async function ContactProfilePage({ params }: ContactProfilePageP
     );
   }
 
-  // Get messages from this contact
   const allMessages = await getMessages();
   const contactMessages = allMessages.filter((m) => m.sender.name === contact.name);
 
   return (
-    <div className="min-h-screen p-6">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen p-6 bg-gray-50">
+      <div className="max-w-4xl mx-auto">
         {/* Back button */}
         <Link href="/contacts">
-          <button className="flex items-center gap-2 text-gray-400 hover:text-gray-900 mb-6 transition-colors">
-            <ArrowLeft size={20} />
-            <span>Back to Contacts</span>
+          <button className="flex items-center gap-2 text-gray-500 hover:text-gray-900 mb-6 transition-colors text-sm">
+            <ArrowLeft size={16} />
+            <span>Contacts</span>
           </button>
         </Link>
 
-        {/* Contact Header Card */}
-        <GlassCard className="p-8 mb-6">
-          <div className="flex flex-col md:flex-row items-start gap-6">
+        {/* Contact Header — Kinso style */}
+        <GlassCard className="p-6 mb-6">
+          <div className="flex items-start gap-5">
             {/* Avatar */}
-            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-5xl shrink-0">
+            <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center text-4xl shrink-0 ring-2 ring-gray-100">
               {contact.avatar}
             </div>
 
-            {/* Info */}
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">{contact.name}</h1>
-              <p className="text-xl text-gray-300 mb-1">{contact.role}</p>
-              <p className="text-gray-400 mb-4">{contact.company}</p>
+              <h1 className="text-2xl font-bold text-gray-900">{contact.name}</h1>
+              <p className="text-sm text-gray-500 mt-0.5">
+                {contact.role} · {contact.company} · {contact.location || 'Unknown'}
+              </p>
 
-              {/* Channels */}
-              <div className="flex items-center gap-3 mb-6">
-                <span className="text-sm text-gray-400">Available on:</span>
-                {contact.channels.map((channel) => (
-                  <ChannelBadge key={channel} channel={channel} size="md" />
-                ))}
-              </div>
-
-              {/* Relationship Score */}
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-400">Relationship Score</span>
-                  <span className="text-2xl font-bold text-gray-900">{contact.relationshipScore}%</span>
-                </div>
-                <div className="h-3 bg-gray-50 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-500"
-                    style={{ width: `${contact.relationshipScore}%` }}
-                  />
-                </div>
+              {/* Platform icons row */}
+              <div className="flex items-center gap-1.5 mt-3">
+                {(contact.allPlatforms || contact.channels).map((platform) => {
+                  const config = platformIcons[platform];
+                  if (!config) return null;
+                  return (
+                    <div
+                      key={platform}
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${config.color}`}
+                      title={platform}
+                    >
+                      {config.label}
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Action buttons */}
-              <div className="flex gap-3">
-                <button className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-gray-900 rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all">
-                  <Mail size={18} />
-                  <span>Send Message</span>
+              <div className="flex gap-2 mt-4">
+                <button className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition-colors">
+                  <Mail size={14} />
+                  Message
                 </button>
-                <button className="flex items-center gap-2 px-4 py-2 bg-gray-50 text-gray-900 rounded-lg hover:bg-gray-50 transition-all border border-white/[0.08]">
-                  <Phone size={18} />
-                  <span>Call</span>
+                <button className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-gray-700 text-sm rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                  <Phone size={14} />
+                  Call
                 </button>
-                <button className="flex items-center gap-2 px-4 py-2 bg-gray-50 text-gray-900 rounded-lg hover:bg-gray-50 transition-all border border-white/[0.08]">
-                  <Video size={18} />
-                  <span>Video</span>
+                <button className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-gray-700 text-sm rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                  <Video size={14} />
+                  Video
                 </button>
               </div>
             </div>
 
-            {/* Last interaction */}
-            <div className="text-right">
-              <p className="text-sm text-gray-400 mb-1">Last contact</p>
-              <p className="text-gray-900 font-semibold">
-                {getRelativeTime(contact.lastInteraction)}
-              </p>
+            {/* Relationship score */}
+            <div className="text-right shrink-0">
+              <p className="text-3xl font-bold text-gray-900">{contact.relationshipScore}%</p>
+              <p className="text-xs text-gray-500">Relationship</p>
+              <div className="h-1.5 w-20 bg-gray-200 rounded-full overflow-hidden mt-1">
+                <div
+                  className="h-full bg-orange-400 rounded-full"
+                  style={{ width: `${contact.relationshipScore}%` }}
+                />
+              </div>
             </div>
           </div>
         </GlassCard>
 
+        {/* AI Bio — Kinso "Remember every detail" style */}
+        {contact.bio && (
+          <GlassCard className="p-6 mb-6">
+            <p className="text-sm text-gray-700 leading-relaxed">{contact.bio}</p>
+          </GlassCard>
+        )}
+
         {/* Two column layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left column - Personality & Details */}
+          {/* Left column */}
           <div className="space-y-6">
             <PersonalityProfile personality={contact.personality} />
 
-            {/* Quick Stats */}
-            <GlassCard className="p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Stats</h3>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-400 text-sm">Total Conversations</span>
-                  <span className="text-gray-900 font-semibold">{contactMessages.length}</span>
+            <GlassCard className="p-5">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">Quick Stats</h3>
+              <div className="space-y-2.5">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Conversations</span>
+                  <span className="text-gray-900 font-medium">{contactMessages.length}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400 text-sm">Unread Messages</span>
-                  <span className="text-gray-900 font-semibold">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Unread</span>
+                  <span className="text-gray-900 font-medium">
                     {contactMessages.filter((m) => m.unread).length}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400 text-sm">Avg Response Time</span>
-                  <span className="text-gray-900 font-semibold">2.4 hours</span>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Avg Response</span>
+                  <span className="text-gray-900 font-medium">2.4h</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Last Contact</span>
+                  <span className="text-gray-900 font-medium">{getRelativeTime(contact.lastInteraction)}</span>
                 </div>
               </div>
             </GlassCard>
           </div>
 
-          {/* Right column - Recent Conversations */}
+          {/* Right column */}
           <div className="lg:col-span-2">
-            <GlassCard className="p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Conversations</h2>
-
+            <GlassCard className="p-5">
+              <h2 className="text-sm font-semibold text-gray-900 mb-3">Recent Conversations</h2>
               {contactMessages.length > 0 ? (
-                <div className="space-y-3">
+                <div className="divide-y divide-gray-100">
                   {contactMessages.map((message) => (
                     <MessageCard key={message.id} message={message} />
                   ))}
                 </div>
               ) : (
-                <p className="text-gray-400 text-center py-8">No recent conversations</p>
+                <p className="text-gray-400 text-center py-8 text-sm">No recent conversations</p>
               )}
             </GlassCard>
           </div>

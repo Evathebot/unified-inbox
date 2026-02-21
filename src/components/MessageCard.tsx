@@ -35,17 +35,28 @@ export default function MessageCard({ message, isSelected = false, onClick }: Me
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2 mb-0.5">
-            <h3 className={`text-sm ${message.unread ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}>
-              {message.sender.name}
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className={`text-sm ${message.unread ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}>
+                {message.sender.name}
+              </h3>
+              <ChannelBadge channel={message.channel} size="sm" />
+            </div>
             <span className="text-xs text-gray-400 shrink-0">
               {getRelativeTime(message.timestamp)}
             </span>
           </div>
 
-          <p className="text-sm text-gray-500 line-clamp-1">
-            {message.subject || message.preview}
-          </p>
+          {/* Topic label + preview */}
+          <div className="flex items-center gap-2 mt-0.5">
+            {message.topicLabel && (
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium shrink-0 ${message.topicColor || 'bg-gray-100 text-gray-600'}`}>
+                {message.topicLabel}
+              </span>
+            )}
+            <p className="text-sm text-gray-500 line-clamp-1">
+              {message.subject || message.preview}
+            </p>
+          </div>
 
           {/* AI draft indicator */}
           {message.hasAIDraft && (
@@ -54,11 +65,6 @@ export default function MessageCard({ message, isSelected = false, onClick }: Me
               <span>AI draft ready</span>
             </div>
           )}
-        </div>
-
-        {/* Platform icon on right */}
-        <div className="shrink-0 mt-1">
-          <ChannelBadge channel={message.channel} size="sm" />
         </div>
       </div>
     </div>

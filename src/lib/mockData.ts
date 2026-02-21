@@ -13,6 +13,10 @@ export interface Message {
   timestamp: Date;
   priority: number;
   unread: boolean;
+  answered: boolean;
+  account: 'work' | 'personal';
+  topicLabel?: string;
+  topicColor?: string;
   hasAIDraft: boolean;
   thread?: {
     messages: {
@@ -29,10 +33,14 @@ export interface Contact {
   name: string;
   company: string;
   role: string;
+  location: string;
   avatar: string;
+  avatarUrl?: string;
   channels: Channel[];
+  allPlatforms: string[];
   relationshipScore: number;
   lastInteraction: Date;
+  bio: string;
   personality: {
     communicationStyle: string;
     decisionMaking: string;
@@ -76,6 +84,10 @@ export const mockMessages: Message[] = [
     timestamp: new Date(Date.now() - 2 * 60 * 1000),
     priority: 95,
     unread: true,
+    answered: false,
+    account: 'work',
+    topicLabel: 'Financial Review',
+    topicColor: 'bg-red-100 text-red-700',
     hasAIDraft: true,
     thread: {
       messages: [
@@ -92,6 +104,10 @@ export const mockMessages: Message[] = [
     timestamp: new Date(Date.now() - 5 * 60 * 1000),
     priority: 98,
     unread: true,
+    answered: false,
+    account: 'work',
+    topicLabel: 'Incident Response',
+    topicColor: 'bg-orange-100 text-orange-700',
     hasAIDraft: true,
     thread: {
       messages: [
@@ -108,6 +124,10 @@ export const mockMessages: Message[] = [
     timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000),
     priority: 65,
     unread: true,
+    answered: false,
+    account: 'work',
+    topicLabel: 'Brand Design',
+    topicColor: 'bg-purple-100 text-purple-700',
     hasAIDraft: true,
     thread: {
       messages: [
@@ -124,6 +144,10 @@ export const mockMessages: Message[] = [
     timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
     priority: 55,
     unread: false,
+    answered: true,
+    account: 'work',
+    topicLabel: 'Analytics',
+    topicColor: 'bg-blue-100 text-blue-700',
     hasAIDraft: false,
     thread: {
       messages: [
@@ -140,6 +164,10 @@ export const mockMessages: Message[] = [
     timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000),
     priority: 78,
     unread: true,
+    answered: false,
+    account: 'work',
+    topicLabel: 'Legal Review',
+    topicColor: 'bg-amber-100 text-amber-700',
     hasAIDraft: true,
     thread: {
       messages: [
@@ -156,6 +184,10 @@ export const mockMessages: Message[] = [
     timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000),
     priority: 25,
     unread: false,
+    answered: true,
+    account: 'personal',
+    topicLabel: 'Social',
+    topicColor: 'bg-green-100 text-green-700',
     hasAIDraft: false,
     thread: {
       messages: [
@@ -171,6 +203,10 @@ export const mockMessages: Message[] = [
     timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000),
     priority: 70,
     unread: true,
+    answered: false,
+    account: 'work',
+    topicLabel: 'Investor Update',
+    topicColor: 'bg-emerald-100 text-emerald-700',
     hasAIDraft: true,
     thread: {
       messages: [
@@ -187,6 +223,10 @@ export const mockMessages: Message[] = [
     timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000),
     priority: 40,
     unread: false,
+    answered: true,
+    account: 'work',
+    topicLabel: 'Engineering',
+    topicColor: 'bg-slate-100 text-slate-700',
     hasAIDraft: false,
     thread: {
       messages: [
@@ -203,6 +243,10 @@ export const mockMessages: Message[] = [
     timestamp: new Date(Date.now() - 20 * 60 * 60 * 1000),
     priority: 72,
     unread: true,
+    answered: false,
+    account: 'work',
+    topicLabel: 'Product Strategy',
+    topicColor: 'bg-indigo-100 text-indigo-700',
     hasAIDraft: true,
     thread: {
       messages: [
@@ -219,6 +263,10 @@ export const mockMessages: Message[] = [
     timestamp: new Date(Date.now() - 22 * 60 * 60 * 1000),
     priority: 20,
     unread: false,
+    answered: true,
+    account: 'personal',
+    topicLabel: 'Fitness',
+    topicColor: 'bg-teal-100 text-teal-700',
     hasAIDraft: false,
     thread: {
       messages: [
@@ -235,10 +283,14 @@ export const mockContacts: Contact[] = [
     name: 'Sarah Chen',
     company: 'FinTech Innovations',
     role: 'CFO',
+    location: 'New York',
     avatar: '👩‍💼',
+    avatarUrl: 'https://i.pravatar.cc/150?img=1',
     channels: ['gmail', 'slack'],
+    allPlatforms: ['gmail', 'slack', 'linkedin'],
     relationshipScore: 92,
     lastInteraction: new Date(Date.now() - 2 * 60 * 1000),
+    bio: 'Sarah Chen is CFO at FinTech Innovations, a fast-growing financial technology company in New York. With over 15 years of experience in corporate finance, she specializes in strategic planning and financial modeling. She communicates in a direct, data-driven style and prefers structured bullet points over lengthy emails. Your relationship spans 2 years with frequent collaboration on budgets and quarterly reviews.',
     personality: {
       communicationStyle: 'Direct and data-driven. Prefers bullet points and clear action items.',
       decisionMaking: 'Analytical. Needs detailed financial projections before approving decisions.',
@@ -252,10 +304,14 @@ export const mockContacts: Contact[] = [
     name: 'Marcus Rodriguez',
     company: 'DevOps Solutions',
     role: 'Lead Engineer',
+    location: 'Austin',
     avatar: '👨‍💻',
+    avatarUrl: 'https://i.pravatar.cc/150?img=3',
     channels: ['whatsapp', 'slack', 'telegram'],
+    allPlatforms: ['whatsapp', 'slack', 'telegram', 'gmail'],
     relationshipScore: 88,
     lastInteraction: new Date(Date.now() - 5 * 60 * 1000),
+    bio: 'Marcus Rodriguez is the Lead Engineer at DevOps Solutions, known for his expertise in cloud infrastructure and CI/CD pipelines. Based in Austin, he\'s a night owl who prefers fast-paced, emoji-filled communication. He\'s your go-to for production incidents and has been a trusted technical partner for over 18 months.',
     personality: {
       communicationStyle: 'Fast-paced and technical. Uses lots of emojis and GIFs.',
       decisionMaking: 'Instinctive. Trusts his technical gut but values team input.',
@@ -269,10 +325,14 @@ export const mockContacts: Contact[] = [
     name: 'Emily Foster',
     company: 'Creative Studio X',
     role: 'Creative Director',
+    location: 'London',
     avatar: '🎨',
+    avatarUrl: 'https://i.pravatar.cc/150?img=5',
     channels: ['telegram', 'gmail'],
+    allPlatforms: ['telegram', 'gmail', 'instagram', 'linkedin'],
     relationshipScore: 85,
     lastInteraction: new Date(Date.now() - 1 * 60 * 60 * 1000),
+    bio: 'Emily Foster is the Creative Director at Creative Studio X in London. She brings a unique blend of contemporary art sensibility and brand strategy to every project. Known for sharing mood boards and design references, Emily has been your creative partner on branding and visual identity work for the past year.',
     personality: {
       communicationStyle: 'Visual and expressive. Loves sharing design references and mood boards.',
       decisionMaking: 'Intuitive. Relies on aesthetics and brand alignment.',
@@ -286,10 +346,14 @@ export const mockContacts: Contact[] = [
     name: 'David Kim',
     company: 'DataViz Corp',
     role: 'Analytics Manager',
+    location: 'San Francisco',
     avatar: '📊',
+    avatarUrl: 'https://i.pravatar.cc/150?img=8',
     channels: ['slack', 'gmail'],
+    allPlatforms: ['slack', 'gmail', 'linkedin'],
     relationshipScore: 79,
     lastInteraction: new Date(Date.now() - 2 * 60 * 60 * 1000),
+    bio: 'David Kim manages analytics at DataViz Corp in San Francisco. He\'s methodical and evidence-based, always backing decisions with data. Your collaboration focuses on dashboard metrics and executive presentations. He\'s been instrumental in shaping your data strategy.',
     personality: {
       communicationStyle: 'Methodical and detailed. Loves dashboards and visual data.',
       decisionMaking: 'Evidence-based. Needs A/B test results and user metrics.',
@@ -303,10 +367,14 @@ export const mockContacts: Contact[] = [
     name: 'Jennifer Wu',
     company: 'Global Law Partners',
     role: 'Senior Counsel',
+    location: 'Boston',
     avatar: '⚖️',
+    avatarUrl: 'https://i.pravatar.cc/150?img=10',
     channels: ['gmail'],
+    allPlatforms: ['gmail', 'linkedin'],
     relationshipScore: 91,
     lastInteraction: new Date(Date.now() - 3 * 60 * 60 * 1000),
+    bio: 'Jennifer Wu is Senior Counsel at Global Law Partners in Boston, specializing in tech partnerships and IP law. She\'s precise and thorough—every word in her communications is carefully chosen. Your working relationship has been critical for navigating contract negotiations and compliance requirements.',
     personality: {
       communicationStyle: 'Precise and formal. Every word matters.',
       decisionMaking: 'Risk-averse. Thoroughly evaluates legal implications.',
