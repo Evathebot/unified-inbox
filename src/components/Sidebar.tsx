@@ -16,6 +16,16 @@ const platformIcons = [
   { platform: 'telegram', href: '/?channel=telegram', label: 'Telegram' },
 ];
 
+// Unread counts per platform - passed via data attribute on body or computed
+// For now we'll show static badges based on common platforms
+const defaultBadges: Record<string, number> = {
+  inbox: 0, // Will sum all
+  gmail: 3,
+  whatsapp: 2,
+  telegram: 2,
+  slack: 1,
+};
+
 function SidebarInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -30,11 +40,13 @@ function SidebarInner() {
             ? pathname === '/' && !channelParam
             : channelParam === item.platform;
 
+          const badge = defaultBadges[item.platform] || 0;
+
           return (
             <Link key={item.label} href={item.href} title={item.label}>
               <div
                 className={`
-                  w-10 h-10 rounded-xl flex items-center justify-center
+                  relative w-10 h-10 rounded-xl flex items-center justify-center
                   transition-all duration-150
                   ${isActive 
                     ? 'bg-gray-100 shadow-sm ring-1 ring-gray-200' 
@@ -43,6 +55,11 @@ function SidebarInner() {
                 `}
               >
                 <PlatformLogo platform={item.platform} size={22} />
+                {badge > 0 && item.platform !== 'inbox' && (
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                    {badge}
+                  </span>
+                )}
               </div>
             </Link>
           );
@@ -62,7 +79,7 @@ function SidebarInner() {
           </div>
         </Link>
         <Link href="/contacts" title="Contacts">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 ${pathname === '/contacts' ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'}`}>
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 ${pathname.startsWith('/contacts') ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'}`}>
             <Users size={18} />
           </div>
         </Link>

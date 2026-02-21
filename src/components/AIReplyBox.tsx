@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles, Send } from 'lucide-react';
+import { Sparkles, Send, Check } from 'lucide-react';
 
 interface AIReplyBoxProps {
   suggestedReply: string;
@@ -11,11 +11,20 @@ interface AIReplyBoxProps {
 export default function AIReplyBox({ suggestedReply, onSend }: AIReplyBoxProps) {
   const [reply, setReply] = useState(suggestedReply);
   const [isEditing, setIsEditing] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  const handleSend = () => {
+    onSend(reply);
+    setSent(true);
+    setTimeout(() => setSent(false), 3000);
+  };
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
       <div className="flex items-center gap-2 mb-3">
-        <Sparkles size={16} className="text-orange-500" />
+        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-orange-400 to-teal-500 flex items-center justify-center">
+          <Sparkles size={10} className="text-white" />
+        </div>
         <span className="text-sm font-medium text-gray-700">AI Suggested Reply</span>
       </div>
 
@@ -43,11 +52,15 @@ export default function AIReplyBox({ suggestedReply, onSend }: AIReplyBoxProps) 
           {isEditing ? 'Preview' : 'Edit'}
         </button>
         <button
-          onClick={() => onSend(reply)}
-          className="flex items-center gap-1.5 px-4 py-1.5 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition-colors"
+          onClick={handleSend}
+          disabled={sent}
+          className={`flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg transition-colors ${
+            sent
+              ? 'bg-green-500 text-white'
+              : 'bg-gray-900 text-white hover:bg-gray-800'
+          }`}
         >
-          <Send size={14} />
-          Send
+          {sent ? <><Check size={14} /> Sent!</> : <><Send size={14} /> Send</>}
         </button>
       </div>
     </div>
