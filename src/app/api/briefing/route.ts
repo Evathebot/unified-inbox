@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
     const allActionItems: Array<{ text: string; messageId: string; from: string }> = [];
     
     recentMessages.forEach((msg: { id: string; body: string; from: string }) => {
-      const items = extractActionItems(msg.body);
+      const items = await extractActionItems(msg.body);
       items.forEach((item: string) => {
         allActionItems.push({
           text: item,

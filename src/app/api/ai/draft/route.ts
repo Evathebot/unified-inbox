@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     // Generate draft reply
     const conversationMessages = message.conversation?.messages || [];
-    const draftReply = generateDraftReply(message, conversationMessages);
+    const draftReply = await generateDraftReply(message, conversationMessages);
 
     // Optionally store the draft
     await prisma.message.update({
