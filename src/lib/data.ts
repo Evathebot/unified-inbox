@@ -19,7 +19,75 @@ import { extractActionItems } from './ai';
 /**
  * Transform database message to frontend Message type
  */
+// Infer topic from subject/body keywords
+function inferTopic(subject: string, body: string): string | undefined {
+  const text = `${subject} ${body}`.toLowerCase();
+  const rules: [string[], string][] = [
+    [['budget', 'invoice', 'payment', 'facture', 'financial', 'paiement'], 'Finance'],
+    [['campaign', 'marketing', 'launch', 'brand'], 'Marketing'],
+    [['design', 'mockup', 'figma', 'ui', 'color', 'font'], 'Design'],
+    [['api', 'deploy', 'code', 'bug', 'integration', 'testing'], 'Engineering'],
+    [['contract', 'legal', 'compliance', 'terms'], 'Legal'],
+    [['investor', 'funding', 'pitch', 'deck'], 'Investor Relations'],
+    [['meeting', 'call', 'schedule', 'calendar'], 'Meeting'],
+    [['hiring', 'candidate', 'interview', 'onboard'], 'Hiring'],
+    [['urgent', 'asap', 'deadline', 'reminder'], 'Urgent'],
+    [['networking', 'event', 'conference'], 'Networking'],
+    [['supplies', 'order', 'office'], 'Operations'],
+    [['website', 'copy', 'content', 'draft'], 'Content'],
+    [['renovation', 'travaux', 'plomberie'], 'Personal'],
+    [['gym', 'lunch', 'dinner', 'workout'], 'Social'],
+    [['linkedin', 'connection', 'notification'], 'Social'],
+  ];
+  for (const [keywords, label] of rules) {
+    if (keywords.some(kw => text.includes(kw))) return label;
+  }
+  return undefined;
+}
+
+// Topic color palette
+const topicColors: Record<string, string> = {
+  default: 'bg-gray-100 text-gray-600',
+  finance: 'bg-red-100 text-red-700',
+  engineering: 'bg-blue-100 text-blue-700',
+  design: 'bg-purple-100 text-purple-700',
+  marketing: 'bg-pink-100 text-pink-700',
+  legal: 'bg-amber-100 text-amber-700',
+  sales: 'bg-green-100 text-green-700',
+  hr: 'bg-teal-100 text-teal-700',
+  social: 'bg-emerald-100 text-emerald-700',
+  urgent: 'bg-orange-100 text-orange-700',
+  investor: 'bg-indigo-100 text-indigo-700',
+};
+
+function getTopicColor(topic: string): string {
+  const lower = topic.toLowerCase();
+  for (const [key, color] of Object.entries(topicColors)) {
+    if (lower.includes(key)) return color;
+  }
+  return topicColors.default;
+}
+
 function transformMessage(dbMessage: any): Message {
+  // Extract topic from AIMetadata
+  let topicLabel: string | undefined;
+  let topicColor: string | undefined;
+  if (dbMessage.aiMetadata?.topics) {
+    try {
+      const topics = JSON.parse(dbMessage.aiMetadata.topics);
+      if (Array.isArray(topics) && topics.length > 0) {
+        topicLabel = topics[0];
+        topicColor = getTopicColor(topics[0]);
+      }
+    } catch { /* ignore */ }
+  }
+
+  // Infer topic from subject/content if no AI topics
+  if (!topicLabel && dbMessage.subject) {
+    topicLabel = inferTopic(dbMessage.subject, dbMessage.body);
+    if (topicLabel) topicColor = getTopicColor(topicLabel);
+  }
+
   return {
     id: dbMessage.id,
     channel: dbMessage.channel as any,
@@ -35,8 +103,8 @@ function transformMessage(dbMessage: any): Message {
     unread: !dbMessage.read,
     answered: dbMessage.read,
     account: 'work' as const,
-    topicLabel: undefined,
-    topicColor: undefined,
+    topicLabel,
+    topicColor,
     hasAIDraft: !!dbMessage.aiDraft || !!dbMessage.aiMetadata?.draftReply,
     thread: dbMessage.thread
       ? {
@@ -91,17 +159,27 @@ function transformContact(dbContact: any): Contact {
     };
   }
 
+  // Extract role/location from metadata or notes if available
+  let meta: any = {};
+  try {
+    if (dbContact.metadata) meta = JSON.parse(dbContact.metadata);
+  } catch { /* ignore */ }
+
   return {
     id: dbContact.id,
     name: dbContact.name,
     company: dbContact.businessEntity || 'N/A',
-    role: 'Contact',
+    role: meta.role || meta.title || 'Contact',
+    location: meta.location || '',
     avatar: dbContact.avatar || '👤',
+    avatarUrl: dbContact.avatar?.startsWith('http') ? dbContact.avatar : undefined,
     channels,
+    allPlatforms: channels,
     relationshipScore: dbContact.relationshipScore,
     lastInteraction: dbContact.lastContactDate
       ? new Date(dbContact.lastContactDate)
       : new Date(),
+    bio: meta.bio || '',
     personality,
   };
 }
@@ -342,7 +420,7 @@ export async function getBriefing(): Promise<BriefingData> {
     ]);
 
     return {
-      greeting: `Good morning`,
+      greeting: now.getHours() < 12 ? 'Good morning' : now.getHours() < 17 ? 'Good afternoon' : 'Good evening',
       date: now.toLocaleDateString('en-US', {
         weekday: 'long',
         year: 'numeric',

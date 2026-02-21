@@ -12,11 +12,11 @@ interface CalendarViewProps {
 
 export default function CalendarView({ events }: CalendarViewProps) {
   const [selectedEvent, setSelectedEvent] = useState(events[0]);
+  const [weekOffset, setWeekOffset] = useState(0);
 
-  // Get current week
   const today = new Date();
   const weekStart = new Date(today);
-  weekStart.setDate(today.getDate() - today.getDay());
+  weekStart.setDate(today.getDate() - today.getDay() + weekOffset * 7);
 
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const date = new Date(weekStart);
@@ -45,14 +45,23 @@ export default function CalendarView({ events }: CalendarViewProps) {
           </div>
 
           <div className="flex items-center gap-3">
-            <button className="p-2 rounded-lg bg-gray-50 hover:bg-blue-50 transition-all border border-gray-200">
-              <ChevronLeft size={20} className="text-gray-900" />
+            <button
+              onClick={() => setWeekOffset(weekOffset - 1)}
+              className="p-2 rounded-lg bg-white hover:bg-gray-50 transition-all border border-gray-200"
+            >
+              <ChevronLeft size={20} className="text-gray-600" />
             </button>
-            <button className="px-4 py-2 rounded-lg bg-gray-50 hover:bg-blue-50 transition-all border border-gray-200 text-gray-900">
+            <button
+              onClick={() => setWeekOffset(0)}
+              className="px-4 py-2 rounded-lg bg-white hover:bg-gray-50 transition-all border border-gray-200 text-gray-700 text-sm font-medium"
+            >
               Today
             </button>
-            <button className="p-2 rounded-lg bg-gray-50 hover:bg-blue-50 transition-all border border-gray-200">
-              <ChevronRight size={20} className="text-gray-900" />
+            <button
+              onClick={() => setWeekOffset(weekOffset + 1)}
+              className="p-2 rounded-lg bg-white hover:bg-gray-50 transition-all border border-gray-200"
+            >
+              <ChevronRight size={20} className="text-gray-600" />
             </button>
           </div>
         </div>
@@ -62,7 +71,6 @@ export default function CalendarView({ events }: CalendarViewProps) {
           {/* Events List */}
           <div className="lg:col-span-2">
             <div className="space-y-4">
-              {/* Week View */}
               {weekDays.map((day) => {
                 const dayEvents = events.filter(
                   (event) => event.startTime.toDateString() === day.toDateString()
@@ -76,15 +84,15 @@ export default function CalendarView({ events }: CalendarViewProps) {
                       <div
                         className={`
                         w-12 h-12 rounded-xl flex flex-col items-center justify-center
-                        ${isToday ? 'bg-purple-500 text-gray-900' : 'bg-gray-50 text-gray-600'}
+                        ${isToday ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'}
                       `}
                       >
-                        <span className="text-xs uppercase">
+                        <span className="text-xs uppercase font-medium">
                           {day.toLocaleDateString('en-US', { weekday: 'short' })}
                         </span>
                         <span className="text-lg font-bold">{day.getDate()}</span>
                       </div>
-                      <div className="flex-1 h-px bg-gray-50"></div>
+                      <div className="flex-1 h-px bg-gray-200"></div>
                     </div>
 
                     {dayEvents.length > 0 ? (
@@ -98,7 +106,7 @@ export default function CalendarView({ events }: CalendarViewProps) {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-gray-500 text-sm ml-0 lg:ml-4 mb-4">No events</p>
+                      <p className="text-gray-400 text-sm ml-0 lg:ml-4 mb-4">No events</p>
                     )}
                   </div>
                 );
@@ -111,19 +119,19 @@ export default function CalendarView({ events }: CalendarViewProps) {
             {selectedEvent && (
               <div className="sticky top-6">
                 <GlassCard className="p-6">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-4">{selectedEvent.title}</h2>
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">{selectedEvent.title}</h2>
 
                   <div className="space-y-4 mb-6">
                     <div>
-                      <p className="text-sm text-gray-500 mb-1">Date & Time</p>
-                      <p className="text-gray-900">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Date & Time</p>
+                      <p className="text-gray-900 text-sm">
                         {selectedEvent.startTime.toLocaleDateString('en-US', {
                           weekday: 'long',
                           month: 'long',
                           day: 'numeric',
                         })}
                       </p>
-                      <p className="text-gray-600">
+                      <p className="text-gray-600 text-sm">
                         {selectedEvent.startTime.toLocaleTimeString('en-US', {
                           hour: 'numeric',
                           minute: '2-digit',
@@ -137,10 +145,10 @@ export default function CalendarView({ events }: CalendarViewProps) {
                     </div>
 
                     <div>
-                      <p className="text-sm text-gray-500 mb-2">Attendees</p>
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Attendees</p>
                       <div className="space-y-1">
                         {selectedEvent.attendees.map((attendee, idx) => (
-                          <p key={idx} className="text-gray-900 text-sm">
+                          <p key={idx} className="text-gray-700 text-sm">
                             {attendee}
                           </p>
                         ))}
@@ -149,11 +157,9 @@ export default function CalendarView({ events }: CalendarViewProps) {
                   </div>
 
                   {/* AI Brief */}
-                  <div className="border-t border-gray-200 pt-4">
+                  <div className="border-t border-gray-100 pt-4">
                     <div className="flex items-center gap-2 mb-3">
-                      <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center">
-                        <span className="text-orange-500 text-xs">✨</span>
-                      </div>
+                      <div className="w-5 h-5 rounded-full bg-gradient-to-br from-orange-400 to-teal-500 shadow-[0_0_6px_1px_rgba(249,115,22,0.3),0_0_6px_1px_rgba(20,184,166,0.3)]"></div>
                       <p className="text-sm font-semibold text-orange-500">AI Meeting Brief</p>
                     </div>
                     <p className="text-gray-600 text-sm leading-relaxed">{selectedEvent.brief}</p>
@@ -161,10 +167,10 @@ export default function CalendarView({ events }: CalendarViewProps) {
 
                   {/* Actions */}
                   <div className="mt-6 space-y-2">
-                    <button className="w-full px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-gray-900 rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all">
+                    <button className="w-full px-4 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-all text-sm font-medium">
                       Join Meeting
                     </button>
-                    <button className="w-full px-4 py-2 bg-gray-50 text-gray-900 rounded-lg hover:bg-blue-50 transition-all border border-gray-200">
+                    <button className="w-full px-4 py-2.5 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all border border-gray-200 text-sm font-medium">
                       View Details
                     </button>
                   </div>

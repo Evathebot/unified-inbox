@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { ArrowUp, SlidersHorizontal, ChevronRight, X } from 'lucide-react';
 import Avatar from '@/components/Avatar';
 import Link from 'next/link';
@@ -17,6 +18,9 @@ interface InboxViewProps {
 }
 
 export default function InboxView({ initialMessages }: InboxViewProps) {
+  const searchParams = useSearchParams();
+  const channelFilter = searchParams.get('channel');
+
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(
     initialMessages[0] || null
   );
@@ -46,6 +50,7 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
     if (filterUnread && !message.unread) return false;
     if (filterUnanswered && message.answered) return false;
     if (accountFilter !== 'all' && message.account !== accountFilter) return false;
+    if (channelFilter && message.channel !== channelFilter) return false;
     return true;
   });
 

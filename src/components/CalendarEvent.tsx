@@ -16,31 +16,31 @@ export default function CalendarEventCard({ event, onClick }: CalendarEventProps
     <GlassCard hover onClick={onClick} className="p-4">
       <div className="flex items-start gap-4">
         {/* Time indicator */}
-        <div className="flex flex-col items-center justify-center bg-purple-500/20 rounded-lg p-3 shrink-0">
-          <span className="text-xs text-purple-300 uppercase">
+        <div className="flex flex-col items-center justify-center bg-orange-50 rounded-lg p-3 shrink-0 min-w-[52px]">
+          <span className="text-[10px] text-gray-500 uppercase font-medium">
             {event.startTime.toLocaleDateString('en-US', { month: 'short' })}
           </span>
-          <span className="text-xl font-bold text-orange-500">
+          <span className="text-xl font-bold text-gray-900">
             {event.startTime.getDate()}
           </span>
         </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          <h3 className="text-gray-900 font-semibold mb-2">{event.title}</h3>
+          <h3 className="text-gray-900 font-semibold text-sm mb-1.5">{event.title}</h3>
           
-          <div className="flex items-center gap-4 text-sm text-gray-500 mb-3">
+          <div className="flex items-center gap-3 text-xs text-gray-500 mb-2">
             <div className="flex items-center gap-1">
-              <Clock size={14} />
+              <Clock size={12} />
               <span>{formatTime(event.startTime)} - {formatTime(event.endTime)}</span>
             </div>
             <div className="flex items-center gap-1">
-              <Users size={14} />
-              <span>{event.attendees.length} attendees</span>
+              <Users size={12} />
+              <span>{event.attendees.length}</span>
             </div>
           </div>
 
-          <p className="text-sm text-gray-500 line-clamp-2">
+          <p className="text-xs text-gray-400 line-clamp-2">
             {event.brief}
           </p>
         </div>

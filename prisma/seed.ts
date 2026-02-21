@@ -30,7 +30,18 @@ async function main() {
         relationshipScore: 85,
         lastContactDate: new Date('2026-02-20'),
         notes: 'Lead designer for the rebrand project. Very detail-oriented.',
-        personalityProfile: '💼 **Important contact** - established business relationship\n**Communication:** Prefers email, professional tone',
+        personalityProfile: JSON.stringify({
+          communicationStyle: 'Visual and detail-oriented. Shares mood boards and references.',
+          decisionMaking: 'Collaborative, seeks consensus before finalizing.',
+          preferredLanguage: 'English',
+          interests: ['UI Design', 'Typography', 'Brand Strategy'],
+          bestTimeToReach: 'Weekday mornings 9-11 AM EST',
+        }),
+        metadata: JSON.stringify({
+          role: 'Lead Designer',
+          location: 'Toronto',
+          bio: 'Sarah Chen is the Lead Designer at Design Studio Inc. in Toronto. She specializes in brand identity and UI/UX design with over 8 years of experience. Known for her meticulous attention to detail and collaborative approach, she has been your creative partner on the rebrand project.',
+        }),
       },
     }),
     prisma.contact.create({
@@ -44,6 +55,11 @@ async function main() {
         relationshipScore: 75,
         lastContactDate: new Date('2026-02-19'),
         notes: 'Contractor for office renovation. Speaks French primarily.',
+        metadata: JSON.stringify({
+          role: 'General Contractor',
+          location: 'Montreal',
+          bio: 'Marc Tremblay runs Rénovation Pro in Montreal, specializing in commercial and office renovations. Primarily French-speaking, he communicates in a warm, direct style. Currently managing your office renovation project.',
+        }),
       },
     }),
     prisma.contact.create({
@@ -57,6 +73,11 @@ async function main() {
         relationshipScore: 90,
         lastContactDate: new Date('2026-02-21'),
         notes: 'Investor and advisor. Very responsive, high priority.',
+        metadata: JSON.stringify({
+          role: 'Managing Partner',
+          location: 'Toronto',
+          bio: 'James Wilson is Managing Partner at Tech Ventures, a Toronto-based VC firm focused on early-stage technology companies. He is an active advisor and investor in your company, known for quick responses and strategic thinking.',
+        }),
       },
     }),
     prisma.contact.create({
@@ -70,6 +91,11 @@ async function main() {
         relationshipScore: 70,
         lastContactDate: new Date('2026-02-18'),
         notes: 'Marketing consultant. Bilingual, prefers French.',
+        metadata: JSON.stringify({
+          role: 'Marketing Director',
+          location: 'Montreal',
+          bio: 'Amélie Dubois is Marketing Director at Marketing Plus in Montreal. Bilingual in French and English, she brings a creative and strategic approach to campaign management. Currently leading the Q1 campaign launch.',
+        }),
       },
     }),
     prisma.contact.create({
@@ -82,6 +108,11 @@ async function main() {
         relationshipScore: 65,
         lastContactDate: new Date('2026-02-17'),
         notes: 'Lead developer on the platform project.',
+        metadata: JSON.stringify({
+          role: 'Lead Developer',
+          location: 'Vancouver',
+          bio: 'David Park is Lead Developer at DevTeam Solutions in Vancouver. He specializes in full-stack development and API integrations. Currently building the platform integration layer for your product.',
+        }),
       },
     }),
     // Medium-priority contacts
@@ -94,6 +125,11 @@ async function main() {
         relationshipScore: 55,
         lastContactDate: new Date('2026-02-15'),
         notes: 'Freelance copywriter.',
+        metadata: JSON.stringify({
+          role: 'Freelance Copywriter',
+          location: 'Toronto',
+          bio: 'Lisa Anderson is a freelance copywriter based in Toronto, specializing in tech and SaaS content. She is working on website copy for the latest product launch.',
+        }),
       },
     }),
     prisma.contact.create({
@@ -106,6 +142,11 @@ async function main() {
         relationshipScore: 60,
         lastContactDate: new Date('2026-02-10'),
         notes: 'Accountant. French-speaking.',
+        metadata: JSON.stringify({
+          role: 'Accountant',
+          location: 'Montreal',
+          bio: 'Robert Gagnon manages your business accounting at Comptabilité R.G. in Montreal. French-speaking, he handles invoices, tax filings, and financial reporting.',
+        }),
       },
     }),
     prisma.contact.create({
@@ -117,6 +158,11 @@ async function main() {
         businessEntity: 'Startup Accelerator',
         relationshipScore: 50,
         lastContactDate: new Date('2026-02-05'),
+        metadata: JSON.stringify({
+          role: 'Program Director',
+          location: 'Toronto',
+          bio: 'Emily Thompson is Program Director at Startup Accelerator in Toronto. She connects founders with mentors and investors, and has been a networking contact since the last accelerator cohort.',
+        }),
       },
     }),
     // Lower-priority contacts
@@ -127,6 +173,7 @@ async function main() {
         relationshipScore: 40,
         lastContactDate: new Date('2026-01-28'),
         notes: 'Office supplies vendor.',
+        metadata: JSON.stringify({ role: 'Account Manager', location: 'Toronto' }),
       },
     }),
     prisma.contact.create({
@@ -136,6 +183,7 @@ async function main() {
         phone: '+1-416-555-0808',
         relationshipScore: 35,
         lastContactDate: new Date('2026-01-20'),
+        metadata: JSON.stringify({ role: 'Event Coordinator', location: 'Toronto' }),
       },
     }),
   ]);

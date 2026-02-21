@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import ChannelBadge from './ChannelBadge';
+import Avatar from './Avatar';
 import { Contact, getRelativeTime } from '@/lib/mockData';
 import GlassCard from './GlassCard';
 
@@ -12,18 +13,14 @@ export default function ContactCard({ contact }: ContactCardProps) {
     <Link href={`/contacts/${contact.id}`}>
       <GlassCard hover className="p-5">
         <div className="flex items-start gap-4">
-          {/* Avatar */}
-          <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-2xl shrink-0">
-            {contact.avatar}
-          </div>
+          <Avatar src={contact.avatarUrl || contact.avatar} name={contact.name} size="lg" />
 
-          {/* Content */}
           <div className="flex-1 min-w-0">
             <h3 className="text-gray-900 font-semibold mb-0.5">{contact.name}</h3>
-            <p className="text-sm text-gray-500 mb-1">{contact.role}</p>
-            <p className="text-xs text-gray-500 mb-3">{contact.company}</p>
+            <p className="text-sm text-gray-500 mb-0.5">{contact.role}</p>
+            <p className="text-xs text-gray-400 mb-3">{contact.company}</p>
 
-            {/* Channels */}
+            {/* Platform logos */}
             <div className="flex items-center gap-2 mb-3">
               {contact.channels.map((channel) => (
                 <ChannelBadge key={channel} channel={channel} size="sm" />
@@ -36,16 +33,15 @@ export default function ContactCard({ contact }: ContactCardProps) {
                 <span className="text-gray-500">Relationship</span>
                 <span className="text-gray-900 font-medium">{contact.relationshipScore}%</span>
               </div>
-              <div className="h-1.5 bg-gray-50 rounded-full overflow-hidden">
+              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-500"
+                  className="h-full bg-orange-400 rounded-full transition-all duration-500"
                   style={{ width: `${contact.relationshipScore}%` }}
                 />
               </div>
             </div>
 
-            {/* Last Interaction */}
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-xs text-gray-400 mt-2">
               Last contact: {getRelativeTime(contact.lastInteraction)}
             </p>
           </div>

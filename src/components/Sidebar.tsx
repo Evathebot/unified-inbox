@@ -1,8 +1,9 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Users, Settings } from 'lucide-react';
+import { Suspense } from 'react';
+import { Users, Settings, Calendar } from 'lucide-react';
 import PlatformLogo from './PlatformLogo';
 
 const platformIcons = [
@@ -15,21 +16,19 @@ const platformIcons = [
   { platform: 'telegram', href: '/?channel=telegram', label: 'Telegram' },
 ];
 
-const bottomNav = [
-  { icon: 'inbox', href: '/', label: 'Inbox', isLucide: false },
-  { icon: 'users', href: '/contacts', label: 'Contacts', isLucide: true },
-  { icon: 'settings', href: '/settings', label: 'Settings', isLucide: true },
-];
-
-export default function Sidebar() {
+function SidebarInner() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const channelParam = searchParams.get('channel');
 
   return (
     <div className="h-screen w-16 bg-white border-r border-gray-200 flex flex-col items-center py-4">
       {/* Platform logos */}
       <div className="flex flex-col items-center gap-2 flex-1">
         {platformIcons.map((item) => {
-          const isActive = item.href === '/' ? pathname === '/' : false;
+          const isActive = item.platform === 'inbox'
+            ? pathname === '/' && !channelParam
+            : channelParam === item.platform;
 
           return (
             <Link key={item.label} href={item.href} title={item.label}>
@@ -38,7 +37,7 @@ export default function Sidebar() {
                   w-10 h-10 rounded-xl flex items-center justify-center
                   transition-all duration-150
                   ${isActive 
-                    ? 'bg-gray-100 shadow-sm' 
+                    ? 'bg-gray-100 shadow-sm ring-1 ring-gray-200' 
                     : 'hover:bg-gray-50'
                   }
                 `}
@@ -52,25 +51,26 @@ export default function Sidebar() {
 
       {/* Bottom nav */}
       <div className="flex flex-col items-center gap-1 pb-2">
-        {bottomNav.map((item) => {
-          if (item.isLucide) {
-            const Icon = item.icon === 'users' ? Users : Settings;
-            return (
-              <Link key={item.label} href={item.href} title={item.label}>
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all duration-150">
-                  <Icon size={18} />
-                </div>
-              </Link>
-            );
-          }
-          return (
-            <Link key={item.label} href={item.href} title={item.label}>
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center hover:bg-gray-50 transition-all duration-150">
-                <PlatformLogo platform={item.icon} size={18} />
-              </div>
-            </Link>
-          );
-        })}
+        <Link href="/briefing" title="Briefing">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 ${pathname === '/briefing' ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'}`}>
+            <PlatformLogo platform="inbox" size={18} />
+          </div>
+        </Link>
+        <Link href="/calendar" title="Calendar">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 ${pathname === '/calendar' ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'}`}>
+            <Calendar size={18} />
+          </div>
+        </Link>
+        <Link href="/contacts" title="Contacts">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 ${pathname === '/contacts' ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'}`}>
+            <Users size={18} />
+          </div>
+        </Link>
+        <Link href="/settings" title="Settings">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 ${pathname === '/settings' ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'}`}>
+            <Settings size={18} />
+          </div>
+        </Link>
       </div>
 
       {/* User avatar */}
@@ -80,5 +80,13 @@ export default function Sidebar() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function Sidebar() {
+  return (
+    <Suspense fallback={<div className="h-screen w-16 bg-white border-r border-gray-200" />}>
+      <SidebarInner />
+    </Suspense>
   );
 }

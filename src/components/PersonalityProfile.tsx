@@ -45,7 +45,7 @@ export default function PersonalityProfile({ personality }: PersonalityProfilePr
             {personality.interests.map((interest) => (
               <span
                 key={interest}
-                className="px-3 py-1 bg-purple-500/20 text-purple-300 rounded-full text-xs"
+                className="px-3 py-1 bg-orange-50 text-orange-600 rounded-full text-xs font-medium"
               >
                 {interest}
               </span>
