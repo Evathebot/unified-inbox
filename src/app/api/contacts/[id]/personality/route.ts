@@ -10,11 +10,12 @@ import { analyzeContactPersonality } from '@/lib/ai';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const contact = await prisma.contact.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         messages: {
           orderBy: { timestamp: 'desc' },
@@ -44,7 +45,7 @@ export async function GET(
 
     // Store the profile
     await prisma.contact.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         personalityProfile: JSON.stringify(analysis),
         relationshipScore: analysis.relationshipStrength,

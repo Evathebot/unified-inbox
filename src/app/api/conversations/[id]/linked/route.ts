@@ -8,11 +8,12 @@ import { prisma } from '@/lib/db';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const conversation = await prisma.conversation.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: {
         contactId: true,
         channel: true,
@@ -26,7 +27,7 @@ export async function GET(
     // Find other conversations with same contact
     const linkedConversations = await prisma.conversation.findMany({
       where: {
-        id: { not: params.id },
+        id: { not: id },
         contactId: conversation.contactId,
       },
       include: {

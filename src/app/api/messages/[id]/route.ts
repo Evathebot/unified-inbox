@@ -8,11 +8,12 @@ import { prisma } from '@/lib/db';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const message = await prisma.message.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         contact: true,
         aiMetadata: true,
@@ -44,9 +45,10 @@ export async function GET(
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const { read, priority } = body;
 
@@ -65,7 +67,7 @@ export async function PATCH(
     }
 
     const message = await prisma.message.update({
-      where: { id: params.id },
+      where: { id },
       data: updateData,
       include: {
         contact: true,
