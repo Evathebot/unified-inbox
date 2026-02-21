@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles, ArrowUp, SlidersHorizontal, ChevronRight, X } from 'lucide-react';
+import { ArrowUp, SlidersHorizontal, ChevronRight, X } from 'lucide-react';
+import Avatar from '@/components/Avatar';
 import Link from 'next/link';
 import SearchBar from '@/components/SearchBar';
 import MessageCard from '@/components/MessageCard';
@@ -209,7 +210,7 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
         {/* AI Ask input at bottom */}
         <div className="p-3 border-t border-gray-100">
           <div className="relative">
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-gradient-to-br from-orange-400 to-teal-500"></div>
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-gradient-to-br from-orange-400 to-teal-500 shadow-[0_0_8px_2px_rgba(249,115,22,0.4),0_0_8px_2px_rgba(20,184,166,0.4)]"></div>
             <input
               type="text"
               value={aiQuery}
@@ -231,14 +232,7 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
             {/* Conversation Header */}
             <div className="p-6 bg-white border-b border-gray-200">
               <div className="flex items-start gap-4">
-                <div className="relative">
-                  <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-2xl text-gray-600">
-                    {selectedMessage.sender.avatar}
-                  </div>
-                  {selectedMessage.sender.online && (
-                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
-                  )}
-                </div>
+                <Avatar src={selectedMessage.sender.avatar} name={selectedMessage.sender.name} size="lg" online={selectedMessage.sender.online} />
 
                 <div className="flex-1">
                   <div className="flex items-start justify-between">
@@ -281,9 +275,7 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
               {selectedMessage.thread?.messages.map((msg, idx) => (
                 <div key={idx} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
                   <div className="flex items-start gap-3 mb-2">
-                    <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-sm text-gray-600">
-                      {selectedMessage.sender.avatar}
-                    </div>
+                    <Avatar src={selectedMessage.sender.avatar} name={selectedMessage.sender.name} size="sm" />
                     <div>
                       <p className="text-sm font-medium text-gray-900">{msg.from}</p>
                       <p className="text-xs text-gray-400">{getRelativeTime(msg.timestamp)}</p>

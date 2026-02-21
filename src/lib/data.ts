@@ -33,6 +33,10 @@ function transformMessage(dbMessage: any): Message {
     timestamp: new Date(dbMessage.timestamp),
     priority: dbMessage.priority,
     unread: !dbMessage.read,
+    answered: dbMessage.read,
+    account: 'work' as const,
+    topicLabel: undefined,
+    topicColor: undefined,
     hasAIDraft: !!dbMessage.aiDraft || !!dbMessage.aiMetadata?.draftReply,
     thread: dbMessage.thread
       ? {

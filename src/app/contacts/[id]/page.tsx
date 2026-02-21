@@ -8,6 +8,7 @@ import { getContactWithPersonality, getMessages } from '@/lib/data';
 import { getRelativeTime } from '@/lib/mockData';
 
 import PlatformLogo from '@/components/PlatformLogo';
+import Avatar from '@/components/Avatar';
 
 interface ContactProfilePageProps {
   params: Promise<{ id: string }>;
@@ -43,9 +44,7 @@ export default async function ContactProfilePage({ params }: ContactProfilePageP
         <GlassCard className="p-6 mb-6">
           <div className="flex items-start gap-5">
             {/* Avatar */}
-            <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center text-4xl shrink-0 ring-2 ring-gray-100">
-              {contact.avatar}
-            </div>
+            <Avatar src={contact.avatarUrl || contact.avatar} name={contact.name} size="xl" />
 
             <div className="flex-1">
               <h1 className="text-2xl font-bold text-gray-900">{contact.name}</h1>

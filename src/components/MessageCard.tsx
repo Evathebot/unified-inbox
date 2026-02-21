@@ -1,5 +1,6 @@
 import { Sparkles } from 'lucide-react';
 import ChannelBadge from './ChannelBadge';
+import Avatar from './Avatar';
 import { Message, getRelativeTime } from '@/lib/mockData';
 
 interface MessageCardProps {
@@ -22,15 +23,7 @@ export default function MessageCard({ message, isSelected = false, onClick }: Me
       `}
     >
       <div className="flex items-start gap-3">
-        {/* Avatar */}
-        <div className="relative shrink-0">
-          <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-lg text-gray-600">
-            {message.sender.avatar}
-          </div>
-          {message.sender.online && (
-            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></div>
-          )}
-        </div>
+        <Avatar src={message.sender.avatar} name={message.sender.name} size="md" online={message.sender.online} />
 
         {/* Content */}
         <div className="flex-1 min-w-0">
