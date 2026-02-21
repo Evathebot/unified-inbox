@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { score, reason } = calculatePriorityScore(targetMessage);
+    const { score, reason } = await calculatePriorityScore(targetMessage);
 
     return NextResponse.json({
       score,

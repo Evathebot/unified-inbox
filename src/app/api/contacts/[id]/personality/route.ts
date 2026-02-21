@@ -41,7 +41,7 @@ export async function GET(
     }
 
     // Generate new personality profile
-    const analysis = analyzeContactPersonality(contact.messages);
+    const analysis = await analyzeContactPersonality(contact.messages);
 
     // Store the profile
     await prisma.contact.update({
