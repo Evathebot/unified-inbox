@@ -108,7 +108,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     const avgPriority = priorityMessages.length > 0
-      ? priorityMessages.reduce((sum, m) => sum + m.priority, 0) / priorityMessages.length
+      ? priorityMessages.reduce((sum: number, m: { priority: number }) => sum + m.priority, 0) / priorityMessages.length
       : 50;
 
     return NextResponse.json({
