@@ -22,6 +22,9 @@ export default function BriefingCard({
           <Icon size={22} />
         </div>
         <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+        {title.toLowerCase().includes('ai') && (
+          <span className="ai-badge text-[9px] font-bold text-white px-1.5 py-0.5 rounded-full uppercase tracking-wider">AI</span>
+        )}
       </div>
       <div>{children}</div>
     </GlassCard>

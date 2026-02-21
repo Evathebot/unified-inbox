@@ -159,8 +159,10 @@ export default function CalendarView({ events }: CalendarViewProps) {
                   {/* AI Brief */}
                   <div className="border-t border-gray-100 pt-4">
                     <div className="flex items-center gap-2 mb-3">
-                      <div className="w-5 h-5 rounded-full bg-gradient-to-br from-orange-400 to-teal-500 shadow-[0_0_6px_1px_rgba(249,115,22,0.3),0_0_6px_1px_rgba(20,184,166,0.3)]"></div>
-                      <p className="text-sm font-semibold text-orange-500">AI Meeting Brief</p>
+                      <div className="ai-orb relative" style={{width: 20, height: 20}}>
+                        <div className="ai-orb-glow"></div>
+                      </div>
+                      <p className="ai-text-gradient text-sm font-semibold">AI Meeting Brief</p>
                     </div>
                     <p className="text-gray-600 text-sm leading-relaxed">{selectedEvent.brief}</p>
                   </div>
