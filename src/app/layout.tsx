@@ -28,7 +28,10 @@ export default function RootLayout({
           </div>
 
           {/* Main content area */}
-          <main className="flex-1 overflow-auto bg-gray-50">
+          <main className="flex-1 overflow-auto bg-gray-50 relative">
+            <div className="absolute top-3 right-4 z-50 text-[11px] font-mono text-gray-400 bg-white/80 backdrop-blur-sm px-2 py-0.5 rounded-md border border-gray-100">
+              v0.1.0
+            </div>
             {children}
           </main>
         </div>
