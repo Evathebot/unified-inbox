@@ -209,7 +209,7 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
         {/* AI Ask input at bottom */}
         <div className="p-3 border-t border-gray-100">
           <div className="relative">
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-gradient-to-br from-orange-400 to-red-400"></div>
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-gradient-to-br from-orange-400 to-teal-500"></div>
             <input
               type="text"
               value={aiQuery}

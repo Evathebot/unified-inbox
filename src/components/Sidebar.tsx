@@ -2,21 +2,23 @@
 
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Inbox, Mail, MessageCircle, Send, Hash, Users, Calendar, Sun, Settings } from 'lucide-react';
+import { Users, Settings } from 'lucide-react';
+import PlatformLogo from './PlatformLogo';
 
 const platformIcons = [
-  { icon: Inbox, href: '/', color: 'text-gray-700', hoverBg: 'hover:bg-gray-100', label: 'Inbox' },
-  { icon: Mail, href: '/?channel=gmail', color: 'text-red-500', hoverBg: 'hover:bg-red-50', label: 'Gmail' },
-  { icon: MessageCircle, href: '/?channel=whatsapp', color: 'text-green-500', hoverBg: 'hover:bg-green-50', label: 'WhatsApp' },
-  { icon: Send, href: '/?channel=telegram', color: 'text-blue-500', hoverBg: 'hover:bg-blue-50', label: 'Telegram' },
-  { icon: Hash, href: '/?channel=slack', color: 'text-purple-700', hoverBg: 'hover:bg-purple-50', label: 'Slack' },
+  { platform: 'inbox', href: '/', label: 'All Inbox' },
+  { platform: 'gmail', href: '/?channel=gmail', label: 'Gmail' },
+  { platform: 'instagram', href: '/?channel=instagram', label: 'Instagram' },
+  { platform: 'linkedin', href: '/?channel=linkedin', label: 'LinkedIn' },
+  { platform: 'slack', href: '/?channel=slack', label: 'Slack' },
+  { platform: 'whatsapp', href: '/?channel=whatsapp', label: 'WhatsApp' },
+  { platform: 'telegram', href: '/?channel=telegram', label: 'Telegram' },
 ];
 
 const bottomNav = [
-  { icon: Inbox, href: '/', label: 'Inbox' },
-  { icon: Mail, href: '/briefing', label: 'Briefing' },
-  { icon: Users, href: '/contacts', label: 'Contacts' },
-  { icon: Settings, href: '/settings', label: 'Settings' },
+  { icon: 'inbox', href: '/', label: 'Inbox', isLucide: false },
+  { icon: 'users', href: '/contacts', label: 'Contacts', isLucide: true },
+  { icon: 'settings', href: '/settings', label: 'Settings', isLucide: true },
 ];
 
 export default function Sidebar() {
@@ -24,11 +26,10 @@ export default function Sidebar() {
 
   return (
     <div className="h-screen w-16 bg-white border-r border-gray-200 flex flex-col items-center py-4">
-      {/* Platform icons */}
-      <div className="flex flex-col items-center gap-1 flex-1">
+      {/* Platform logos */}
+      <div className="flex flex-col items-center gap-2 flex-1">
         {platformIcons.map((item) => {
-          const Icon = item.icon;
-          const isActive = pathname === item.href || (item.href === '/' && pathname === '/');
+          const isActive = item.href === '/' ? pathname === '/' : false;
 
           return (
             <Link key={item.label} href={item.href} title={item.label}>
@@ -37,12 +38,12 @@ export default function Sidebar() {
                   w-10 h-10 rounded-xl flex items-center justify-center
                   transition-all duration-150
                   ${isActive 
-                    ? `${item.color} bg-gray-100` 
-                    : `text-gray-400 ${item.hoverBg} hover:text-gray-600`
+                    ? 'bg-gray-100 shadow-sm' 
+                    : 'hover:bg-gray-50'
                   }
                 `}
               >
-                <Icon size={20} />
+                <PlatformLogo platform={item.platform} size={22} />
               </div>
             </Link>
           );
@@ -52,11 +53,20 @@ export default function Sidebar() {
       {/* Bottom nav */}
       <div className="flex flex-col items-center gap-1 pb-2">
         {bottomNav.map((item) => {
-          const Icon = item.icon;
+          if (item.isLucide) {
+            const Icon = item.icon === 'users' ? Users : Settings;
+            return (
+              <Link key={item.label} href={item.href} title={item.label}>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all duration-150">
+                  <Icon size={18} />
+                </div>
+              </Link>
+            );
+          }
           return (
             <Link key={item.label} href={item.href} title={item.label}>
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all duration-150">
-                <Icon size={18} />
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center hover:bg-gray-50 transition-all duration-150">
+                <PlatformLogo platform={item.icon} size={18} />
               </div>
             </Link>
           );

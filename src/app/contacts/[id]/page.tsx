@@ -7,16 +7,7 @@ import MessageCard from '@/components/MessageCard';
 import { getContactWithPersonality, getMessages } from '@/lib/data';
 import { getRelativeTime } from '@/lib/mockData';
 
-// Platform icon mapping
-const platformIcons: Record<string, { label: string; color: string }> = {
-  gmail: { label: 'M', color: 'text-red-500 bg-red-50' },
-  instagram: { label: '📷', color: 'text-pink-500 bg-pink-50' },
-  slack: { label: '#', color: 'text-purple-700 bg-purple-50' },
-  whatsapp: { label: '💬', color: 'text-green-500 bg-green-50' },
-  linkedin: { label: 'in', color: 'text-blue-700 bg-blue-50' },
-  telegram: { label: '✈', color: 'text-blue-500 bg-blue-50' },
-  twitter: { label: '𝕏', color: 'text-gray-900 bg-gray-100' },
-};
+import PlatformLogo from '@/components/PlatformLogo';
 
 interface ContactProfilePageProps {
   params: Promise<{ id: string }>;
@@ -64,19 +55,11 @@ export default async function ContactProfilePage({ params }: ContactProfilePageP
 
               {/* Platform icons row */}
               <div className="flex items-center gap-1.5 mt-3">
-                {(contact.allPlatforms || contact.channels).map((platform) => {
-                  const config = platformIcons[platform];
-                  if (!config) return null;
-                  return (
-                    <div
-                      key={platform}
-                      className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${config.color}`}
-                      title={platform}
-                    >
-                      {config.label}
-                    </div>
-                  );
-                })}
+                {(contact.allPlatforms || contact.channels).map((platform) => (
+                  <div key={platform} className="w-7 h-7 flex items-center justify-center" title={platform}>
+                    <PlatformLogo platform={platform} size={20} />
+                  </div>
+                ))}
               </div>
 
               {/* Action buttons */}
