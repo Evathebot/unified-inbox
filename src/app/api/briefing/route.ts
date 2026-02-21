@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
 
     const allActionItems: Array<{ text: string; messageId: string; from: string }> = [];
     
-    recentMessages.forEach((msg: { id: string; body: string; from: string }) => {
+    for (const msg of recentMessages as Array<{ id: string; body: string; from: string }>) {
       const items = await extractActionItems(msg.body);
       items.forEach((item: string) => {
         allActionItems.push({
@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
           from: msg.from,
         });
       });
-    });
+    }
 
     // Stats
     const [totalToday, unreadCount] = await Promise.all([
