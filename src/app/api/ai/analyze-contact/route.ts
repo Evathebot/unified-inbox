@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Analyze personality
-    const analysis = analyzeContactPersonality(contact.messages);
+    const analysis = await analyzeContactPersonality(contact.messages);
 
     // Update contact with new analysis
     await prisma.contact.update({
