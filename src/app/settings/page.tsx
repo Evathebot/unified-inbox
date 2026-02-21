@@ -37,26 +37,26 @@ export default function SettingsPage() {
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">Settings</h1>
-          <p className="text-gray-400">Manage your integrations and preferences</p>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Settings</h1>
+          <p className="text-gray-500">Manage your integrations and preferences</p>
         </div>
 
         {/* Channel Connections */}
         <GlassCard className="p-6 mb-6">
-          <h2 className="text-2xl font-bold text-white mb-6">Channel Connections</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Channel Connections</h2>
           
           <div className="space-y-4">
             {channels.map((channelStatus, idx) => (
               <div
                 key={channelStatus.channel}
-                className="flex items-center justify-between p-4 rounded-xl bg-white/[0.04] border border-white/[0.06]"
+                className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-200"
               >
                 <div className="flex items-center gap-4">
                   <ChannelBadge channel={channelStatus.channel} size="lg" />
                   <div>
-                    <p className="text-white font-semibold">{channelStatus.name}</p>
+                    <p className="text-gray-900 font-semibold">{channelStatus.name}</p>
                     {channelStatus.connected && channelStatus.lastSync && (
-                      <p className="text-sm text-gray-400">Last synced: {channelStatus.lastSync}</p>
+                      <p className="text-sm text-gray-500">Last synced: {channelStatus.lastSync}</p>
                     )}
                   </div>
                 </div>
@@ -83,7 +83,7 @@ export default function SettingsPage() {
                       </div>
                       <button
                         onClick={() => toggleChannel(idx)}
-                        className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all text-sm"
+                        className="px-4 py-2 bg-gradient-to-r from-gray-800 to-gray-900 text-gray-900 rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all text-sm"
                       >
                         Connect
                       </button>
@@ -99,15 +99,15 @@ export default function SettingsPage() {
         <GlassCard className="p-6 mb-6">
           <div className="flex items-center gap-3 mb-6">
             <Zap className="text-purple-400" size={24} />
-            <h2 className="text-2xl font-bold text-white">AI Preferences</h2>
+            <h2 className="text-2xl font-bold text-gray-900">AI Preferences</h2>
           </div>
 
           <div className="space-y-6">
             {/* Auto-draft toggle */}
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-white font-semibold mb-1">Auto-draft Replies</p>
-                <p className="text-sm text-gray-400">
+                <p className="text-gray-900 font-semibold mb-1">Auto-draft Replies</p>
+                <p className="text-sm text-gray-500">
                   Automatically generate AI-powered reply suggestions
                 </p>
               </div>
@@ -129,12 +129,12 @@ export default function SettingsPage() {
             <div>
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <p className="text-white font-semibold mb-1">Priority Scoring Sensitivity</p>
-                  <p className="text-sm text-gray-400">
+                  <p className="text-gray-900 font-semibold mb-1">Priority Scoring Sensitivity</p>
+                  <p className="text-sm text-gray-500">
                     Minimum score to mark messages as high priority
                   </p>
                 </div>
-                <span className="text-white font-bold">{priorityScore}</span>
+                <span className="text-gray-900 font-bold">{priorityScore}</span>
               </div>
               <input
                 type="range"
@@ -142,7 +142,7 @@ export default function SettingsPage() {
                 max="100"
                 value={priorityScore}
                 onChange={(e) => setPriorityScore(Number(e.target.value))}
-                className="w-full h-2 bg-white/[0.08] rounded-full appearance-none cursor-pointer
+                className="w-full h-2 bg-gray-200 rounded-full appearance-none cursor-pointer
                   [&::-webkit-slider-thumb]:appearance-none
                   [&::-webkit-slider-thumb]:w-4
                   [&::-webkit-slider-thumb]:h-4
@@ -158,14 +158,14 @@ export default function SettingsPage() {
         <GlassCard className="p-6 mb-6">
           <div className="flex items-center gap-3 mb-6">
             <Bell className="text-blue-400" size={24} />
-            <h2 className="text-2xl font-bold text-white">Notifications</h2>
+            <h2 className="text-2xl font-bold text-gray-900">Notifications</h2>
           </div>
 
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-white font-semibold mb-1">Push Notifications</p>
-                <p className="text-sm text-gray-400">
+                <p className="text-gray-900 font-semibold mb-1">Push Notifications</p>
+                <p className="text-sm text-gray-500">
                   Receive notifications for new messages
                 </p>
               </div>
@@ -184,15 +184,15 @@ export default function SettingsPage() {
             </div>
 
             <div className="pl-4 space-y-3 text-sm">
-              <label className="flex items-center gap-3 text-gray-300">
+              <label className="flex items-center gap-3 text-gray-600">
                 <input type="checkbox" defaultChecked className="w-4 h-4 rounded" />
                 <span>High priority messages</span>
               </label>
-              <label className="flex items-center gap-3 text-gray-300">
+              <label className="flex items-center gap-3 text-gray-600">
                 <input type="checkbox" defaultChecked className="w-4 h-4 rounded" />
                 <span>Mentions and replies</span>
               </label>
-              <label className="flex items-center gap-3 text-gray-300">
+              <label className="flex items-center gap-3 text-gray-600">
                 <input type="checkbox" className="w-4 h-4 rounded" />
                 <span>All new messages</span>
               </label>
@@ -204,13 +204,13 @@ export default function SettingsPage() {
         <GlassCard className="p-6">
           <div className="flex items-center gap-3 mb-6">
             {darkMode ? <Moon className="text-indigo-400" size={24} /> : <Sun className="text-yellow-400" size={24} />}
-            <h2 className="text-2xl font-bold text-white">Appearance</h2>
+            <h2 className="text-2xl font-bold text-gray-900">Appearance</h2>
           </div>
 
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-white font-semibold mb-1">Dark Mode</p>
-              <p className="text-sm text-gray-400">
+              <p className="text-gray-900 font-semibold mb-1">Dark Mode</p>
+              <p className="text-sm text-gray-500">
                 Use dark theme for better visibility
               </p>
             </div>

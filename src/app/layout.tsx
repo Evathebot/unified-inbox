@@ -20,15 +20,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} antialiased`}>
+      <body className={`${geistSans.variable} antialiased bg-gray-50 text-gray-900`}>
         <div className="flex h-screen overflow-hidden">
-          {/* Sidebar - fixed width on desktop, collapsible on mobile */}
-          <div className="hidden md:block w-64 shrink-0">
+          {/* Sidebar - narrow icon bar */}
+          <div className="hidden md:block shrink-0">
             <Sidebar />
           </div>
 
           {/* Main content area */}
-          <main className="flex-1 overflow-auto">
+          <main className="flex-1 overflow-auto bg-gray-50">
             {children}
           </main>
         </div>

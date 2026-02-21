@@ -13,15 +13,15 @@ export default function BriefingCard({
   title, 
   icon: Icon, 
   children, 
-  iconColor = 'text-purple-400' 
+  iconColor = 'text-orange-500' 
 }: BriefingCardProps) {
   return (
     <GlassCard className="p-6">
       <div className="flex items-center gap-3 mb-4">
         <div className={`${iconColor}`}>
-          <Icon size={24} />
+          <Icon size={22} />
         </div>
-        <h2 className="text-xl font-bold text-white">{title}</h2>
+        <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
       </div>
       <div>{children}</div>
     </GlassCard>

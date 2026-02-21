@@ -40,19 +40,19 @@ export default function CalendarView({ events }: CalendarViewProps) {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-4xl font-bold text-white mb-2">Calendar</h1>
-            <p className="text-gray-400">{formatWeekRange()}</p>
+            <h1 className="text-4xl font-bold text-gray-900 mb-2">Calendar</h1>
+            <p className="text-gray-500">{formatWeekRange()}</p>
           </div>
 
           <div className="flex items-center gap-3">
-            <button className="p-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] transition-all border border-white/[0.08]">
-              <ChevronLeft size={20} className="text-white" />
+            <button className="p-2 rounded-lg bg-gray-50 hover:bg-blue-50 transition-all border border-gray-200">
+              <ChevronLeft size={20} className="text-gray-900" />
             </button>
-            <button className="px-4 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] transition-all border border-white/[0.08] text-white">
+            <button className="px-4 py-2 rounded-lg bg-gray-50 hover:bg-blue-50 transition-all border border-gray-200 text-gray-900">
               Today
             </button>
-            <button className="p-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] transition-all border border-white/[0.08]">
-              <ChevronRight size={20} className="text-white" />
+            <button className="p-2 rounded-lg bg-gray-50 hover:bg-blue-50 transition-all border border-gray-200">
+              <ChevronRight size={20} className="text-gray-900" />
             </button>
           </div>
         </div>
@@ -76,7 +76,7 @@ export default function CalendarView({ events }: CalendarViewProps) {
                       <div
                         className={`
                         w-12 h-12 rounded-xl flex flex-col items-center justify-center
-                        ${isToday ? 'bg-purple-500 text-white' : 'bg-white/[0.06] text-gray-300'}
+                        ${isToday ? 'bg-purple-500 text-gray-900' : 'bg-gray-50 text-gray-600'}
                       `}
                       >
                         <span className="text-xs uppercase">
@@ -84,7 +84,7 @@ export default function CalendarView({ events }: CalendarViewProps) {
                         </span>
                         <span className="text-lg font-bold">{day.getDate()}</span>
                       </div>
-                      <div className="flex-1 h-px bg-white/[0.08]"></div>
+                      <div className="flex-1 h-px bg-gray-50"></div>
                     </div>
 
                     {dayEvents.length > 0 ? (
@@ -111,19 +111,19 @@ export default function CalendarView({ events }: CalendarViewProps) {
             {selectedEvent && (
               <div className="sticky top-6">
                 <GlassCard className="p-6">
-                  <h2 className="text-2xl font-bold text-white mb-4">{selectedEvent.title}</h2>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-4">{selectedEvent.title}</h2>
 
                   <div className="space-y-4 mb-6">
                     <div>
-                      <p className="text-sm text-gray-400 mb-1">Date & Time</p>
-                      <p className="text-white">
+                      <p className="text-sm text-gray-500 mb-1">Date & Time</p>
+                      <p className="text-gray-900">
                         {selectedEvent.startTime.toLocaleDateString('en-US', {
                           weekday: 'long',
                           month: 'long',
                           day: 'numeric',
                         })}
                       </p>
-                      <p className="text-gray-300">
+                      <p className="text-gray-600">
                         {selectedEvent.startTime.toLocaleTimeString('en-US', {
                           hour: 'numeric',
                           minute: '2-digit',
@@ -137,10 +137,10 @@ export default function CalendarView({ events }: CalendarViewProps) {
                     </div>
 
                     <div>
-                      <p className="text-sm text-gray-400 mb-2">Attendees</p>
+                      <p className="text-sm text-gray-500 mb-2">Attendees</p>
                       <div className="space-y-1">
                         {selectedEvent.attendees.map((attendee, idx) => (
-                          <p key={idx} className="text-white text-sm">
+                          <p key={idx} className="text-gray-900 text-sm">
                             {attendee}
                           </p>
                         ))}
@@ -149,22 +149,22 @@ export default function CalendarView({ events }: CalendarViewProps) {
                   </div>
 
                   {/* AI Brief */}
-                  <div className="border-t border-white/[0.08] pt-4">
+                  <div className="border-t border-gray-200 pt-4">
                     <div className="flex items-center gap-2 mb-3">
                       <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center">
-                        <span className="text-purple-400 text-xs">✨</span>
+                        <span className="text-orange-500 text-xs">✨</span>
                       </div>
-                      <p className="text-sm font-semibold text-purple-400">AI Meeting Brief</p>
+                      <p className="text-sm font-semibold text-orange-500">AI Meeting Brief</p>
                     </div>
-                    <p className="text-gray-300 text-sm leading-relaxed">{selectedEvent.brief}</p>
+                    <p className="text-gray-600 text-sm leading-relaxed">{selectedEvent.brief}</p>
                   </div>
 
                   {/* Actions */}
                   <div className="mt-6 space-y-2">
-                    <button className="w-full px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all">
+                    <button className="w-full px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-gray-900 rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all">
                       Join Meeting
                     </button>
-                    <button className="w-full px-4 py-2 bg-white/[0.08] text-white rounded-lg hover:bg-white/[0.12] transition-all border border-white/[0.08]">
+                    <button className="w-full px-4 py-2 bg-gray-50 text-gray-900 rounded-lg hover:bg-blue-50 transition-all border border-gray-200">
                       View Details
                     </button>
                   </div>

@@ -17,8 +17,8 @@ export default function PersonalityProfile({ personality }: PersonalityProfilePr
   return (
     <GlassCard className="p-6">
       <div className="flex items-center gap-3 mb-6">
-        <Brain className="text-purple-400" size={24} />
-        <h2 className="text-xl font-bold text-white">AI Personality Insights</h2>
+        <Brain className="text-orange-500" size={24} />
+        <h2 className="text-xl font-bold text-gray-900">AI Personality Insights</h2>
       </div>
 
       <div className="space-y-4">
@@ -26,18 +26,18 @@ export default function PersonalityProfile({ personality }: PersonalityProfilePr
           const Icon = trait.icon;
           return (
             <div key={trait.label} className="space-y-1">
-              <div className="flex items-center gap-2 text-gray-400 text-sm">
+              <div className="flex items-center gap-2 text-gray-500 text-sm">
                 <Icon size={14} />
                 <span>{trait.label}</span>
               </div>
-              <p className="text-white text-sm pl-6">{trait.value}</p>
+              <p className="text-gray-900 text-sm pl-6">{trait.value}</p>
             </div>
           );
         })}
 
         {/* Interests */}
         <div className="space-y-1 pt-2">
-          <div className="flex items-center gap-2 text-gray-400 text-sm">
+          <div className="flex items-center gap-2 text-gray-500 text-sm">
             <Lightbulb size={14} />
             <span>Key Interests</span>
           </div>

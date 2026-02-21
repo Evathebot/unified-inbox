@@ -13,34 +13,34 @@ export default async function BriefingPage() {
       <div className="max-w-6xl mx-auto">
         {/* Hero Section */}
         <div className="mb-8">
-          <h1 className="text-5xl font-bold text-white mb-2">{briefing.greeting}</h1>
-          <p className="text-xl text-gray-400">{briefing.date}</p>
+          <h1 className="text-5xl font-bold text-gray-900 mb-2">{briefing.greeting}</h1>
+          <p className="text-xl text-gray-500">{briefing.date}</p>
         </div>
 
         {/* Stats Row */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="backdrop-blur-xl bg-white/[0.06] border border-white/[0.08] rounded-xl p-5">
+          <div className="bg-white border border-gray-100 shadow-sm rounded-xl p-5">
             <div className="flex items-center gap-3 mb-2">
               <TrendingUp className="text-purple-400" size={20} />
-              <p className="text-gray-400 text-sm">Messages Yesterday</p>
+              <p className="text-gray-500 text-sm">Messages Yesterday</p>
             </div>
-            <p className="text-3xl font-bold text-white">{briefing.stats.messagesYesterday}</p>
+            <p className="text-3xl font-bold text-gray-900">{briefing.stats.messagesYesterday}</p>
           </div>
 
-          <div className="backdrop-blur-xl bg-white/[0.06] border border-white/[0.08] rounded-xl p-5">
+          <div className="bg-white border border-gray-100 shadow-sm rounded-xl p-5">
             <div className="flex items-center gap-3 mb-2">
               <CheckSquare className="text-green-400" size={20} />
-              <p className="text-gray-400 text-sm">Response Rate</p>
+              <p className="text-gray-500 text-sm">Response Rate</p>
             </div>
-            <p className="text-3xl font-bold text-white">{briefing.stats.responseRate}%</p>
+            <p className="text-3xl font-bold text-gray-900">{briefing.stats.responseRate}%</p>
           </div>
 
-          <div className="backdrop-blur-xl bg-white/[0.06] border border-white/[0.08] rounded-xl p-5">
+          <div className="bg-white border border-gray-100 shadow-sm rounded-xl p-5">
             <div className="flex items-center gap-3 mb-2">
               <Clock className="text-blue-400" size={20} />
-              <p className="text-gray-400 text-sm">Avg Response Time</p>
+              <p className="text-gray-500 text-sm">Avg Response Time</p>
             </div>
-            <p className="text-3xl font-bold text-white">{briefing.stats.avgResponseTime}</p>
+            <p className="text-3xl font-bold text-gray-900">{briefing.stats.avgResponseTime}</p>
           </div>
         </div>
 
@@ -57,7 +57,7 @@ export default async function BriefingPage() {
                 <MessageCard key={message.id} message={message} />
               ))}
               {briefing.priorityMessages.length === 0 && (
-                <p className="text-gray-400 text-center py-4">No priority messages</p>
+                <p className="text-gray-500 text-center py-4">No priority messages</p>
               )}
             </div>
           </BriefingCard>
@@ -73,7 +73,7 @@ export default async function BriefingPage() {
                 <MessageCard key={message.id} message={message} />
               ))}
               {briefing.overdueReplies.length === 0 && (
-                <p className="text-gray-400 text-center py-4">You're all caught up! 🎉</p>
+                <p className="text-gray-500 text-center py-4">You're all caught up! 🎉</p>
               )}
             </div>
           </BriefingCard>
@@ -89,7 +89,7 @@ export default async function BriefingPage() {
                 <CalendarEventCard key={event.id} event={event} />
               ))}
               {briefing.calendarEvents.length === 0 && (
-                <p className="text-gray-400 text-center py-4">No events scheduled</p>
+                <p className="text-gray-500 text-center py-4">No events scheduled</p>
               )}
             </div>
           </BriefingCard>
@@ -104,14 +104,14 @@ export default async function BriefingPage() {
               {briefing.actionItems.map((item, idx) => (
                 <div
                   key={idx}
-                  className="flex items-start gap-3 p-3 rounded-lg hover:bg-white/[0.04] transition-all cursor-pointer"
+                  className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 transition-all cursor-pointer"
                 >
                   <div className="w-5 h-5 rounded border-2 border-gray-500 shrink-0 mt-0.5"></div>
-                  <p className="text-gray-300 text-sm flex-1">{item}</p>
+                  <p className="text-gray-600 text-sm flex-1">{item}</p>
                 </div>
               ))}
               {briefing.actionItems.length === 0 && (
-                <p className="text-gray-400 text-center py-4">No action items</p>
+                <p className="text-gray-500 text-center py-4">No action items</p>
               )}
             </div>
           </BriefingCard>
@@ -124,7 +124,7 @@ export default async function BriefingPage() {
             icon={TrendingUp}
             iconColor="text-purple-400"
           >
-            <div className="space-y-3 text-gray-300">
+            <div className="space-y-3 text-gray-600">
               <p className="leading-relaxed">
                 📈 <strong>Communication Patterns:</strong> Your response rate has improved by 12% this week. 
                 Most productive hours are between 9-11 AM.

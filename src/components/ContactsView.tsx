@@ -27,8 +27,8 @@ export default function ContactsView({ initialContacts }: ContactsViewProps) {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">Contacts</h1>
-          <p className="text-gray-400">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Contacts</h1>
+          <p className="text-gray-500">
             Manage your professional relationships across all platforms
           </p>
         </div>
@@ -44,13 +44,13 @@ export default function ContactsView({ initialContacts }: ContactsViewProps) {
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="backdrop-blur-xl bg-white/[0.06] border border-white/[0.08] rounded-xl p-5">
-            <p className="text-gray-400 text-sm mb-1">Total Contacts</p>
-            <p className="text-3xl font-bold text-white">{initialContacts.length}</p>
+          <div className="backdrop-blur-xl bg-gray-50 border border-gray-200 rounded-xl p-5">
+            <p className="text-gray-500 text-sm mb-1">Total Contacts</p>
+            <p className="text-3xl font-bold text-gray-900">{initialContacts.length}</p>
           </div>
-          <div className="backdrop-blur-xl bg-white/[0.06] border border-white/[0.08] rounded-xl p-5">
-            <p className="text-gray-400 text-sm mb-1">Avg Relationship Score</p>
-            <p className="text-3xl font-bold text-white">
+          <div className="backdrop-blur-xl bg-gray-50 border border-gray-200 rounded-xl p-5">
+            <p className="text-gray-500 text-sm mb-1">Avg Relationship Score</p>
+            <p className="text-3xl font-bold text-gray-900">
               {initialContacts.length > 0
                 ? Math.round(
                     initialContacts.reduce((acc, c) => acc + c.relationshipScore, 0) /
@@ -60,9 +60,9 @@ export default function ContactsView({ initialContacts }: ContactsViewProps) {
               %
             </p>
           </div>
-          <div className="backdrop-blur-xl bg-white/[0.06] border border-white/[0.08] rounded-xl p-5">
-            <p className="text-gray-400 text-sm mb-1">Active Today</p>
-            <p className="text-3xl font-bold text-white">
+          <div className="backdrop-blur-xl bg-gray-50 border border-gray-200 rounded-xl p-5">
+            <p className="text-gray-500 text-sm mb-1">Active Today</p>
+            <p className="text-3xl font-bold text-gray-900">
               {
                 initialContacts.filter(
                   (c) => Date.now() - c.lastInteraction.getTime() < 24 * 60 * 60 * 1000

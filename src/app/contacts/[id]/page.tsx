@@ -34,7 +34,7 @@ export default async function ContactProfilePage({ params }: ContactProfilePageP
       <div className="max-w-6xl mx-auto">
         {/* Back button */}
         <Link href="/contacts">
-          <button className="flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors">
+          <button className="flex items-center gap-2 text-gray-400 hover:text-gray-900 mb-6 transition-colors">
             <ArrowLeft size={20} />
             <span>Back to Contacts</span>
           </button>
@@ -50,7 +50,7 @@ export default async function ContactProfilePage({ params }: ContactProfilePageP
 
             {/* Info */}
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-white mb-2">{contact.name}</h1>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">{contact.name}</h1>
               <p className="text-xl text-gray-300 mb-1">{contact.role}</p>
               <p className="text-gray-400 mb-4">{contact.company}</p>
 
@@ -66,9 +66,9 @@ export default async function ContactProfilePage({ params }: ContactProfilePageP
               <div className="mb-6">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-400">Relationship Score</span>
-                  <span className="text-2xl font-bold text-white">{contact.relationshipScore}%</span>
+                  <span className="text-2xl font-bold text-gray-900">{contact.relationshipScore}%</span>
                 </div>
-                <div className="h-3 bg-white/[0.08] rounded-full overflow-hidden">
+                <div className="h-3 bg-gray-50 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-500"
                     style={{ width: `${contact.relationshipScore}%` }}
@@ -78,15 +78,15 @@ export default async function ContactProfilePage({ params }: ContactProfilePageP
 
               {/* Action buttons */}
               <div className="flex gap-3">
-                <button className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all">
+                <button className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-gray-900 rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all">
                   <Mail size={18} />
                   <span>Send Message</span>
                 </button>
-                <button className="flex items-center gap-2 px-4 py-2 bg-white/[0.08] text-white rounded-lg hover:bg-white/[0.12] transition-all border border-white/[0.08]">
+                <button className="flex items-center gap-2 px-4 py-2 bg-gray-50 text-gray-900 rounded-lg hover:bg-gray-50 transition-all border border-white/[0.08]">
                   <Phone size={18} />
                   <span>Call</span>
                 </button>
-                <button className="flex items-center gap-2 px-4 py-2 bg-white/[0.08] text-white rounded-lg hover:bg-white/[0.12] transition-all border border-white/[0.08]">
+                <button className="flex items-center gap-2 px-4 py-2 bg-gray-50 text-gray-900 rounded-lg hover:bg-gray-50 transition-all border border-white/[0.08]">
                   <Video size={18} />
                   <span>Video</span>
                 </button>
@@ -96,7 +96,7 @@ export default async function ContactProfilePage({ params }: ContactProfilePageP
             {/* Last interaction */}
             <div className="text-right">
               <p className="text-sm text-gray-400 mb-1">Last contact</p>
-              <p className="text-white font-semibold">
+              <p className="text-gray-900 font-semibold">
                 {getRelativeTime(contact.lastInteraction)}
               </p>
             </div>
@@ -111,21 +111,21 @@ export default async function ContactProfilePage({ params }: ContactProfilePageP
 
             {/* Quick Stats */}
             <GlassCard className="p-6">
-              <h3 className="text-lg font-bold text-white mb-4">Quick Stats</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Stats</h3>
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-gray-400 text-sm">Total Conversations</span>
-                  <span className="text-white font-semibold">{contactMessages.length}</span>
+                  <span className="text-gray-900 font-semibold">{contactMessages.length}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400 text-sm">Unread Messages</span>
-                  <span className="text-white font-semibold">
+                  <span className="text-gray-900 font-semibold">
                     {contactMessages.filter((m) => m.unread).length}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400 text-sm">Avg Response Time</span>
-                  <span className="text-white font-semibold">2.4 hours</span>
+                  <span className="text-gray-900 font-semibold">2.4 hours</span>
                 </div>
               </div>
             </GlassCard>
@@ -134,7 +134,7 @@ export default async function ContactProfilePage({ params }: ContactProfilePageP
           {/* Right column - Recent Conversations */}
           <div className="lg:col-span-2">
             <GlassCard className="p-6">
-              <h2 className="text-xl font-bold text-white mb-4">Recent Conversations</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Conversations</h2>
 
               {contactMessages.length > 0 ? (
                 <div className="space-y-3">
