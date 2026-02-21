@@ -9,7 +9,8 @@ import SearchBar from '@/components/SearchBar';
 import MessageCard from '@/components/MessageCard';
 import AIReplyBox from '@/components/AIReplyBox';
 import ChannelBadge from '@/components/ChannelBadge';
-import { Message, Channel, getRelativeTime } from '@/lib/mockData';
+import { Message, Channel, ChannelContext, getRelativeTime } from '@/lib/mockData';
+import ChannelContextBadge from '@/components/ChannelContextBadge';
 
 type SortType = 'priority' | 'recent';
 
@@ -18,6 +19,7 @@ interface ConversationGroup {
   senderAvatar: string;
   senderOnline: boolean;
   channel: Channel;
+  channelContext?: ChannelContext;
   messages: Message[];
   latestTimestamp: Date;
   highestPriority: number;
@@ -49,6 +51,10 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
   const [composeChannel, setComposeChannel] = useState<Channel>('gmail');
   const [composeSubject, setComposeSubject] = useState('');
   const [composeBody, setComposeBody] = useState('');
+
+  // Reply state
+  const [replyText, setReplyText] = useState('');
+  const [replySent, setReplySent] = useState(false);
 
   // Filters
   const [filterUnread, setFilterUnread] = useState(false);
@@ -102,6 +108,7 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
           senderAvatar: msg.sender.avatar,
           senderOnline: msg.sender.online,
           channel: msg.channel,
+          channelContext: msg.channelContext,
           messages: [msg],
           latestTimestamp: msg.timestamp,
           highestPriority: msg.priority,
@@ -343,6 +350,13 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
                       </p>
                     </div>
 
+                    {/* Channel context (workspace/group) */}
+                    {group.channelContext && !group.channelContext.isDM && (
+                      <div className="mt-1">
+                        <ChannelContextBadge channel={group.channel} context={group.channelContext} compact />
+                      </div>
+                    )}
+
                     {group.hasAIDraft && (
                       <div className="flex items-center gap-1 mt-1 text-xs text-orange-500">
                         <Sparkles size={11} />
@@ -516,6 +530,13 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
                     </div>
                     <span className="text-xs text-gray-400">85% relationship</span>
                   </div>
+
+                  {/* Channel context */}
+                  {effectiveSelected.channelContext && !effectiveSelected.channelContext.isDM && (
+                    <div className="mt-3">
+                      <ChannelContextBadge channel={effectiveSelected.channel} context={effectiveSelected.channelContext} />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -548,7 +569,7 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
             {effectiveSelected.hasAIDraft && (() => {
               const draftMsg = effectiveSelected.messages.find(m => m.hasAIDraft && m.aiDraft);
               return draftMsg?.aiDraft ? (
-                <div className="p-6 border-t border-gray-200 bg-white">
+                <div className="px-6 pt-4 bg-white border-t border-gray-100">
                   <AIReplyBox
                     suggestedReply={draftMsg.aiDraft}
                     onSend={(text) => alert(`Reply sent: "${text.substring(0, 50)}..." (Demo mode)`)}
@@ -556,6 +577,61 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
                 </div>
               ) : null;
             })()}
+
+            {/* Reply Input */}
+            <div className="p-4 bg-white border-t border-gray-200">
+              {replySent ? (
+                <div className="flex items-center justify-center gap-2 py-3 text-green-600 text-sm font-medium">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+                  Message sent!
+                </div>
+              ) : (
+                <div className="flex items-end gap-2">
+                  <div className="flex-1 relative">
+                    <textarea
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          if (replyText.trim()) {
+                            setReplySent(true);
+                            setReplyText('');
+                            setTimeout(() => setReplySent(false), 2500);
+                          }
+                        }
+                      }}
+                      placeholder={`Reply to ${effectiveSelected.senderName}...`}
+                      rows={1}
+                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 resize-none focus:outline-none focus:ring-1 focus:ring-gray-300 focus:bg-white placeholder-gray-400 min-h-[40px] max-h-[120px]"
+                      style={{ height: 'auto', overflow: 'hidden' }}
+                      onInput={(e) => {
+                        const target = e.target as HTMLTextAreaElement;
+                        target.style.height = 'auto';
+                        target.style.height = Math.min(target.scrollHeight, 120) + 'px';
+                      }}
+                    />
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (replyText.trim()) {
+                        setReplySent(true);
+                        setReplyText('');
+                        setTimeout(() => setReplySent(false), 2500);
+                      }
+                    }}
+                    disabled={!replyText.trim()}
+                    className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                      replyText.trim()
+                        ? 'bg-gray-900 text-white hover:bg-gray-800'
+                        : 'bg-gray-100 text-gray-400'
+                    }`}
+                  >
+                    <Send size={16} />
+                  </button>
+                </div>
+              )}
+            </div>
           </>
         ) : (
           <div className="flex items-center justify-center h-full text-gray-400 text-sm">

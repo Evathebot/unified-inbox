@@ -328,6 +328,7 @@ async function main() {
         priority: 75,
         threadId: conversations[1].id,
         contactId: contacts[1].id,
+        metadata: JSON.stringify({ groupName: 'Office Reno Team', isDM: false }),
       },
     }),
     prisma.message.create({
@@ -343,6 +344,7 @@ async function main() {
         priority: 80,
         threadId: conversations[1].id,
         contactId: contacts[1].id,
+        metadata: JSON.stringify({ groupName: 'Office Reno Team', isDM: false }),
       },
     }),
     prisma.message.create({
@@ -404,6 +406,7 @@ async function main() {
         priority: 75,
         threadId: conversations[0].id,
         contactId: contacts[0].id,
+        metadata: JSON.stringify({ workspace: 'DarkHorse Inc.', channelName: '#design', isDM: false }),
       },
     }),
     prisma.message.create({
@@ -417,6 +420,7 @@ async function main() {
         timestamp: hoursAgo(3),
         read: false,
         priority: 60,
+        metadata: JSON.stringify({ workspace: 'DarkHorse Inc.', channelName: '#design', isDM: false }),
         threadId: conversations[0].id,
         contactId: contacts[0].id,
       },
@@ -434,6 +438,7 @@ async function main() {
         priority: 65,
         threadId: conversations[4].id,
         contactId: contacts[4].id,
+        metadata: JSON.stringify({ workspace: 'DarkHorse Inc.', channelName: '#engineering', isDM: false }),
         aiDraft: 'Hey David! For the MVP, API key authentication should be sufficient. We can implement OAuth in phase 2 once we have more users.\n\nLet me know if you need any clarification!\n\nBest,\nAlex',
       },
     }),
@@ -450,6 +455,7 @@ async function main() {
         priority: 55,
         threadId: conversations[4].id,
         contactId: contacts[4].id,
+        metadata: JSON.stringify({ workspace: 'DarkHorse Inc.', channelName: '#engineering', isDM: false }),
       },
     }),
     // More varied messages

@@ -1,8 +1,16 @@
 export type Channel = 'gmail' | 'whatsapp' | 'telegram' | 'slack';
 
+export interface ChannelContext {
+  workspace?: string;    // e.g. "DarkHorse Inc." (Slack workspace), "Family Group" (WhatsApp group)
+  channelName?: string;  // e.g. "#engineering", "#general"
+  isDM?: boolean;        // Direct message vs group/channel
+  groupName?: string;    // WhatsApp group name
+}
+
 export interface Message {
   id: string;
   channel: Channel;
+  channelContext?: ChannelContext;
   sender: {
     name: string;
     avatar: string;

@@ -31,7 +31,7 @@ export default function RootLayout({
           {/* Main content area */}
           <main className="flex-1 overflow-auto bg-gray-50 relative pb-16 md:pb-0">
             <div className="absolute top-3 right-4 z-50 text-[11px] font-mono text-gray-400 bg-white/80 backdrop-blur-sm px-2 py-0.5 rounded-md border border-gray-100">
-              v0.4.0
+              v0.5.0
             </div>
             {children}
           </main>

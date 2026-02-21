@@ -88,9 +88,37 @@ function transformMessage(dbMessage: any): Message {
     if (topicLabel) topicColor = getTopicColor(topicLabel);
   }
 
+  // Extract channel context from metadata
+  let channelContext: any = undefined;
+  if (dbMessage.metadata) {
+    try {
+      const meta = JSON.parse(dbMessage.metadata);
+      if (meta.workspace || meta.channelName || meta.groupName) {
+        channelContext = {
+          workspace: meta.workspace,
+          channelName: meta.channelName,
+          isDM: meta.isDM ?? true,
+          groupName: meta.groupName,
+        };
+      }
+    } catch { /* ignore */ }
+  }
+
+  // Infer channel context for slack/whatsapp if not in metadata
+  if (!channelContext) {
+    if (dbMessage.channel === 'slack') {
+      channelContext = { workspace: 'DarkHorse Inc.', channelName: '#general', isDM: false };
+    } else if (dbMessage.channel === 'whatsapp') {
+      channelContext = { isDM: true };
+    } else if (dbMessage.channel === 'telegram') {
+      channelContext = { isDM: true };
+    }
+  }
+
   return {
     id: dbMessage.id,
     channel: dbMessage.channel as any,
+    channelContext,
     sender: {
       name: dbMessage.contact?.name || dbMessage.from,
       avatar: dbMessage.contact?.avatar || '👤',
