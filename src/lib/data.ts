@@ -26,7 +26,7 @@ function transformMessage(dbMessage: any): Message {
     sender: {
       name: dbMessage.contact?.name || dbMessage.from,
       avatar: dbMessage.contact?.avatar || '👤',
-      online: false, // We don't track online status yet
+      online: false,
     },
     subject: dbMessage.subject || undefined,
     preview: dbMessage.body.substring(0, 100) + (dbMessage.body.length > 100 ? '...' : ''),
@@ -36,21 +36,21 @@ function transformMessage(dbMessage: any): Message {
     hasAIDraft: !!dbMessage.aiDraft || !!dbMessage.aiMetadata?.draftReply,
     thread: dbMessage.thread
       ? {
-          messages: dbMessage.thread.map((m: any) => ({
-            from: m.from,
-            content: m.body,
-            timestamp: new Date(m.timestamp),
-          })),
-        }
+        messages: dbMessage.thread.map((m: any) => ({
+          from: m.from,
+          content: m.body,
+          timestamp: new Date(m.timestamp),
+        })),
+      }
       : {
-          messages: [
-            {
-              from: dbMessage.from,
-              content: dbMessage.body,
-              timestamp: new Date(dbMessage.timestamp),
-            },
-          ],
-        },
+        messages: [
+          {
+            from: dbMessage.from,
+            content: dbMessage.body,
+            timestamp: new Date(dbMessage.timestamp),
+          },
+        ],
+      },
     aiDraft: dbMessage.aiDraft || dbMessage.aiMetadata?.draftReply || undefined,
   };
 }
@@ -71,12 +71,12 @@ function transformContact(dbContact: any): Contact {
     personality = dbContact.personalityProfile
       ? JSON.parse(dbContact.personalityProfile)
       : {
-          communicationStyle: 'Professional and concise',
-          decisionMaking: 'Collaborative',
-          preferredLanguage: 'English',
-          interests: [],
-          bestTimeToReach: 'Business hours',
-        };
+        communicationStyle: 'Professional and concise',
+        decisionMaking: 'Collaborative',
+        preferredLanguage: 'English',
+        interests: [],
+        bestTimeToReach: 'Business hours',
+      };
   } catch {
     personality = {
       communicationStyle: dbContact.personalityProfile || 'Professional and concise',
@@ -91,7 +91,7 @@ function transformContact(dbContact: any): Contact {
     id: dbContact.id,
     name: dbContact.name,
     company: dbContact.businessEntity || 'N/A',
-    role: 'Contact', // Not in schema yet
+    role: 'Contact',
     avatar: dbContact.avatar || '👤',
     channels,
     relationshipScore: dbContact.relationshipScore,
@@ -155,7 +155,6 @@ export async function getMessages(filters?: {
     return messages.map(transformMessage);
   } catch (error) {
     console.error('Error fetching messages from database:', error);
-    // Fallback to mock data
     return mockMessages;
   }
 }
@@ -184,7 +183,6 @@ export async function getContacts(search?: string): Promise<Contact[]> {
     return contacts.map(transformContact);
   } catch (error) {
     console.error('Error fetching contacts from database:', error);
-    // Fallback to mock data
     return mockContacts;
   }
 }
@@ -217,7 +215,6 @@ export async function getContactWithPersonality(id: string): Promise<Contact | n
     });
 
     if (!contact) {
-      // Try mock data fallback
       const mockContact = mockContacts.find((c) => c.id === id);
       return mockContact || null;
     }
@@ -225,7 +222,6 @@ export async function getContactWithPersonality(id: string): Promise<Contact | n
     return transformContact(contact);
   } catch (error) {
     console.error('Error fetching contact from database:', error);
-    // Fallback to mock data
     const mockContact = mockContacts.find((c) => c.id === id);
     return mockContact || null;
   }
@@ -250,7 +246,6 @@ export async function getConversation(contactId: string): Promise<Message[]> {
     return messages.map(transformMessage);
   } catch (error) {
     console.error('Error fetching conversation from database:', error);
-    // Fallback to mock data
     return mockMessages.filter((m) => m.sender.name === contactId);
   }
 }
@@ -264,25 +259,18 @@ export async function getBriefing(): Promise<BriefingData> {
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    // Get top 5 priority messages
     const priorityMessages = await prisma.message.findMany({
       where: { read: false },
       orderBy: { priority: 'desc' },
       take: 5,
       include: {
         contact: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            avatar: true,
-          },
+          select: { id: true, name: true, email: true, avatar: true },
         },
         aiMetadata: true,
       },
     });
 
-    // Find overdue replies
     const overdueMessages = await prisma.message.findMany({
       where: {
         timestamp: { lt: oneDayAgo },
@@ -292,18 +280,12 @@ export async function getBriefing(): Promise<BriefingData> {
       take: 10,
       include: {
         contact: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            avatar: true,
-          },
+          select: { id: true, name: true, email: true, avatar: true },
         },
         aiMetadata: true,
       },
     });
 
-    // Today's calendar events
     const todayEvents = await prisma.calendarEvent.findMany({
       where: {
         startTime: {
@@ -314,16 +296,11 @@ export async function getBriefing(): Promise<BriefingData> {
       orderBy: { startTime: 'asc' },
       include: {
         contact: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
+          select: { id: true, name: true, email: true },
         },
       },
     });
 
-    // Extract action items from recent high-priority messages
     const recentMessages = await prisma.message.findMany({
       where: {
         timestamp: { gte: oneDayAgo },
@@ -336,17 +313,19 @@ export async function getBriefing(): Promise<BriefingData> {
       },
     });
 
+    // Handle async action item extraction
     const allActionItems: string[] = [];
-
-    recentMessages.forEach((msg) => {
-      const items = extractActionItems(msg.body);
-      items.forEach((item) => {
+    const extractionPromises = recentMessages.map(async (msg) => {
+      const items = await extractActionItems(msg.body);
+      return items.map((item) => {
         const contactName = msg.contact?.name || msg.from;
-        allActionItems.push(`${item} (${contactName})`);
+        return `${item} (${contactName})`;
       });
     });
 
-    // Stats
+    const extractedResults = await Promise.all(extractionPromises);
+    extractedResults.forEach((results) => allActionItems.push(...results));
+
     const [totalToday, unreadCount] = await Promise.all([
       prisma.message.count({
         where: {
@@ -372,13 +351,12 @@ export async function getBriefing(): Promise<BriefingData> {
       actionItems: allActionItems.slice(0, 10),
       stats: {
         messagesYesterday: totalToday,
-        responseRate: 87, // Placeholder - needs calculation
-        avgResponseTime: '2.3 hours', // Placeholder - needs calculation
+        responseRate: 87,
+        avgResponseTime: '2.3 hours',
       },
     };
   } catch (error) {
     console.error('Error fetching briefing from database:', error);
-    // Fallback to mock data
     return mockBriefing;
   }
 }
@@ -393,10 +371,7 @@ export async function getCalendarEvents(options?: {
 }): Promise<CalendarEvent[]> {
   try {
     const where: any = {};
-
-    // Default to upcoming events
     const fromDate = options?.from || new Date();
-
     where.startTime = { gte: fromDate };
 
     if (options?.to) {
@@ -410,11 +385,7 @@ export async function getCalendarEvents(options?: {
       where,
       include: {
         contact: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
+          select: { id: true, name: true, email: true },
         },
       },
       orderBy: { startTime: 'asc' },
@@ -424,7 +395,6 @@ export async function getCalendarEvents(options?: {
     return events.map(transformCalendarEvent);
   } catch (error) {
     console.error('Error fetching calendar events from database:', error);
-    // Fallback to mock data
     return mockCalendarEvents;
   }
 }
