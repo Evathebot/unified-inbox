@@ -161,8 +161,23 @@ export class ContactResolver {
   }
 
   private async addIdentity(contactId: string, participant: ParticipantInfo): Promise<void> {
-    await this.prisma.contactIdentity.create({
-      data: {
+    await this.prisma.contactIdentity.upsert({
+      where: {
+        platform_platformUserId: {
+          platform: participant.platform,
+          platformUserId: participant.externalId,
+        },
+      },
+      update: {
+        contactId,
+        displayName: participant.displayName,
+        email: participant.email?.toLowerCase(),
+        phone: participant.phone ? this.normalizePhone(participant.phone) : undefined,
+        username: participant.username,
+        avatarUrl: participant.avatarUrl,
+        beeperUserId: participant.beeperUserId,
+      },
+      create: {
         contactId,
         platform: participant.platform,
         platformUserId: participant.externalId,
@@ -194,19 +209,37 @@ export class ContactResolver {
         workspaceId: this.workspaceId,
         name: participant.displayName,
         avatar: participant.avatarUrl,
-        identities: {
-          create: {
-            platform: participant.platform,
-            platformUserId: participant.externalId,
-            displayName: participant.displayName,
-            email: participant.email?.toLowerCase(),
-            phone: participant.phone ? this.normalizePhone(participant.phone) : undefined,
-            username: participant.username,
-            avatarUrl: participant.avatarUrl,
-            beeperUserId: participant.beeperUserId,
-            verified: false,
-          },
+      },
+    });
+
+    // Use upsert to prevent duplicate identities
+    await this.prisma.contactIdentity.upsert({
+      where: {
+        platform_platformUserId: {
+          platform: participant.platform,
+          platformUserId: participant.externalId,
         },
+      },
+      update: {
+        contactId: contact.id,
+        displayName: participant.displayName,
+        email: participant.email?.toLowerCase(),
+        phone: participant.phone ? this.normalizePhone(participant.phone) : undefined,
+        username: participant.username,
+        avatarUrl: participant.avatarUrl,
+        beeperUserId: participant.beeperUserId,
+      },
+      create: {
+        contactId: contact.id,
+        platform: participant.platform,
+        platformUserId: participant.externalId,
+        displayName: participant.displayName,
+        email: participant.email?.toLowerCase(),
+        phone: participant.phone ? this.normalizePhone(participant.phone) : undefined,
+        username: participant.username,
+        avatarUrl: participant.avatarUrl,
+        beeperUserId: participant.beeperUserId,
+        verified: false,
       },
     });
 

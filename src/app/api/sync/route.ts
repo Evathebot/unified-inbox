@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/db';
+import { prisma } from '@/lib/db';
 import { BeeperService } from '@/lib/services/beeper';
 import { SyncEngine } from '@/lib/services/sync-engine';
 
