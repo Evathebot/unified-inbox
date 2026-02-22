@@ -2,11 +2,11 @@
  * Beeper Desktop API Service
  * 
  * Wraps the Beeper Desktop API for chat/message/account operations.
- * Uses PowerShell bridge on WSL since Beeper runs on Windows.
- * In production, this would use the @beeper/desktop-api SDK directly.
+ * Connects via the beeper-relay proxy (Node.js on Windows → Beeper localhost).
+ * 
+ * In production, this would use the @beeper/desktop-api SDK directly
+ * on a machine where Beeper Desktop is running.
  */
-
-import { execSync } from 'child_process';
 
 export interface BeeperAccount {
   accountID: string;
@@ -69,7 +69,7 @@ export interface BeeperMessage {
   senderName: string;
   timestamp: string;
   sortKey: string;
-  type: string; // "TEXT", "IMAGE", "FILE", etc.
+  type: string;
   text: string;
   isSender: boolean;
   attachments?: {
@@ -90,53 +90,94 @@ export interface BeeperConfig {
 }
 
 /**
- * Execute a Beeper API call via PowerShell bridge (WSL → Windows)
+ * Execute a Beeper API call via HTTP (through relay or direct)
  */
-function callBeeperApi(config: BeeperConfig, endpoint: string, method: string = 'GET', body?: any): any {
-  const psPath = '/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe';
+async function callBeeperApi(config: BeeperConfig, endpoint: string, method: string = 'GET', body?: any): Promise<any> {
+  const url = `${config.apiUrl}${endpoint}`;
   
-  let bodyParam = '';
+  const headers: Record<string, string> = {
+    'Authorization': `Bearer ${config.accessToken}`,
+    'Accept': 'application/json',
+  };
+
+  const fetchOptions: RequestInit = {
+    method,
+    headers,
+    signal: AbortSignal.timeout(30000),
+  };
+
   if (body) {
-    const jsonBody = JSON.stringify(body).replace(/'/g, "''");
-    bodyParam = `-Method '${method}' -Body '${jsonBody}' -ContentType 'application/json'`;
+    headers['Content-Type'] = 'application/json';
+    fetchOptions.body = JSON.stringify(body);
   }
 
-  const cmd = `${psPath} -Command "Invoke-RestMethod -Uri '${config.apiUrl}${endpoint}' -Headers @{'Authorization'='Bearer ${config.accessToken}'} ${bodyParam} | ConvertTo-Json -Depth 10"`;
+  try {
+    const response = await fetch(url, fetchOptions);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+
+    const text = await response.text();
+    if (!text || text.trim() === '') return null;
+    return JSON.parse(text);
+  } catch (error: any) {
+    if (error.name === 'TimeoutError') {
+      throw new Error(`Beeper API timeout: ${endpoint}`);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Fallback: PowerShell bridge for WSL → Windows when relay isn't running
+ */
+function callBeeperApiPowerShell(config: BeeperConfig, endpoint: string): any {
+  const { execSync } = require('child_process');
+  const psPath = '/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe';
+  const cmd = `${psPath} -Command "Invoke-RestMethod -Uri '${config.apiUrl}${endpoint}' -Headers @{'Authorization'='Bearer ${config.accessToken}'} | ConvertTo-Json -Depth 10"`;
   
   try {
-    const result = execSync(cmd, { 
-      timeout: 30000,
-      maxBuffer: 10 * 1024 * 1024, // 10MB
-      encoding: 'utf-8'
-    });
-    
+    const result = execSync(cmd, { timeout: 30000, maxBuffer: 10 * 1024 * 1024, encoding: 'utf-8' });
     if (!result || result.trim() === '') return null;
     return JSON.parse(result);
   } catch (error: any) {
-    console.error(`Beeper API error [${endpoint}]:`, error.message);
+    console.error(`Beeper PS bridge error [${endpoint}]:`, error.message);
     throw new Error(`Beeper API call failed: ${endpoint}`);
   }
 }
 
 export class BeeperService {
   private config: BeeperConfig;
+  private useRelay: boolean = true;
 
   constructor(config: BeeperConfig) {
     this.config = config;
   }
 
-  /**
-   * Get all connected accounts
-   */
+  private async call(endpoint: string, method: string = 'GET', body?: any): Promise<any> {
+    if (this.useRelay) {
+      try {
+        return await callBeeperApi(this.config, endpoint, method, body);
+      } catch (error: any) {
+        // If relay fails, fall back to PowerShell bridge
+        if (error.message?.includes('ECONNREFUSED') || error.message?.includes('fetch failed')) {
+          console.warn('[Beeper] Relay unavailable, falling back to PowerShell bridge');
+          this.useRelay = false;
+          return callBeeperApiPowerShell(this.config, endpoint);
+        }
+        throw error;
+      }
+    }
+    return callBeeperApiPowerShell(this.config, endpoint);
+  }
+
   async getAccounts(): Promise<BeeperAccount[]> {
-    const result = callBeeperApi(this.config, '/v1/accounts');
-    // PowerShell wraps arrays in a "value" property
+    const result = await this.call('/v1/accounts');
     return result?.value || result?.items || result || [];
   }
 
-  /**
-   * Get chats (conversations) with pagination
-   */
   async getChats(options: {
     limit?: number;
     after?: string;
@@ -154,7 +195,7 @@ export class BeeperService {
     if (options.includeMuted) params.set('includeMuted', 'true');
 
     const query = params.toString() ? `?${params.toString()}` : '';
-    const result = callBeeperApi(this.config, `/v1/chats${query}`);
+    const result = await this.call(`/v1/chats${query}`);
     
     return {
       items: result?.items || [],
@@ -163,9 +204,6 @@ export class BeeperService {
     };
   }
 
-  /**
-   * Get messages for a specific chat
-   */
   async getMessages(chatId: string, options: {
     limit?: number;
     before?: string;
@@ -178,7 +216,7 @@ export class BeeperService {
 
     const query = params.toString() ? `?${params.toString()}` : '';
     const encodedChatId = encodeURIComponent(chatId);
-    const result = callBeeperApi(this.config, `/v1/chats/${encodedChatId}/messages${query}`);
+    const result = await this.call(`/v1/chats/${encodedChatId}/messages${query}`);
 
     return {
       items: result?.items || [],
@@ -186,31 +224,17 @@ export class BeeperService {
     };
   }
 
-  /**
-   * Send a message to a chat
-   */
   async sendMessage(chatId: string, text: string): Promise<BeeperMessage> {
     const encodedChatId = encodeURIComponent(chatId);
-    return callBeeperApi(
-      this.config,
-      `/v1/chats/${encodedChatId}/messages`,
-      'POST',
-      { text }
-    );
+    return await this.call(`/v1/chats/${encodedChatId}/messages`, 'POST', { text });
   }
 
-  /**
-   * Search chats
-   */
   async searchChats(query: string, limit: number = 20): Promise<BeeperChat[]> {
     const params = new URLSearchParams({ q: query, limit: String(limit) });
-    const result = callBeeperApi(this.config, `/v1/chats/search?${params.toString()}`);
+    const result = await this.call(`/v1/chats/search?${params.toString()}`);
     return result?.items || [];
   }
 
-  /**
-   * Map Beeper network name to our channel name
-   */
   static mapNetwork(network: string): string {
     const map: Record<string, string> = {
       'WhatsApp': 'whatsapp',
@@ -232,35 +256,25 @@ export class BeeperService {
     return map[network] || network.toLowerCase().replace(/\s+/g, '');
   }
 
-  /**
-   * Extract channel context from a Beeper chat
-   */
   static extractChannelContext(chat: BeeperChat): any {
     const channel = BeeperService.mapNetwork(chat.network);
     
     if (chat.type === 'group') {
       if (channel === 'slack') {
-        // Try to extract workspace from account metadata
         return {
-          workspace: chat.title, // Slack channel name is the title
+          workspace: chat.title,
           channelName: `#${chat.title}`,
           isDM: false,
           groupName: chat.title,
         };
       }
-      return {
-        groupName: chat.title,
-        isDM: false,
-      };
+      return { groupName: chat.title, isDM: false };
     }
     
     return { isDM: true };
   }
 }
 
-/**
- * Create a BeeperService from stored connection config
- */
 export function createBeeperService(apiUrl: string, accessToken: string): BeeperService {
   return new BeeperService({ apiUrl, accessToken });
 }
