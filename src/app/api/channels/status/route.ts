@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { requireWorkspace } from '@/lib/auth';
 
 /**
  * GET /api/channels/status
@@ -9,8 +10,10 @@ import { prisma } from '@/lib/db';
  */
 export async function GET() {
   try {
+    const workspace = await requireWorkspace();
     const rows = await prisma.message.groupBy({
       by: ['channel'],
+      where: { workspaceId: workspace.id },
       _count: { id: true },
       _max: { timestamp: true },
     });

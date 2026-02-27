@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { requireWorkspace } from '@/lib/auth';
 import { BeeperService } from '@/lib/services/beeper';
 
 /**
@@ -7,8 +8,7 @@ import { BeeperService } from '@/lib/services/beeper';
  */
 export async function GET() {
   try {
-    const workspace = await prisma.workspace.findFirst();
-    if (!workspace) return NextResponse.json({ connected: false, apiUrl: '' });
+    const workspace = await requireWorkspace();
 
     const connection = await prisma.connection.findFirst({
       where: { workspaceId: workspace.id, platform: 'beeper' },
@@ -50,18 +50,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Ensure a User + Workspace exist (single-user local setup)
-    let workspace = await prisma.workspace.findFirst();
-    if (!workspace) {
-      const user = await prisma.user.upsert({
-        where: { email: 'admin@local' },
-        create: { email: 'admin@local', name: 'Admin' },
-        update: {},
-      });
-      workspace = await prisma.workspace.create({
-        data: { userId: user.id, name: 'My Workspace' },
-      });
-    }
+    const workspace = await requireWorkspace();
 
     // Upsert the Beeper connection (find-first pattern to avoid unique constraint on null accountId)
     const existing = await prisma.connection.findFirst({

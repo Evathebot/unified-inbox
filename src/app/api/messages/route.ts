@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { requireWorkspace } from '@/lib/auth';
 
 /**
  * GET /api/messages
@@ -8,19 +9,20 @@ import { prisma } from '@/lib/db';
  */
 export async function GET(request: NextRequest) {
   try {
+    const workspace = await requireWorkspace();
     const searchParams = request.nextUrl.searchParams;
-    
+
     const channel = searchParams.get('channel');
     const priorityStr = searchParams.get('priority');
     const readStr = searchParams.get('read');
     const contactId = searchParams.get('contactId');
-    
+
     const page = parseInt(searchParams.get('page') || '1');
     const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
     const skip = (page - 1) * limit;
-    
-    const where: Record<string, unknown> = {};
-    
+
+    const where: Record<string, unknown> = { workspaceId: workspace.id };
+
     if (channel) where.channel = channel;
     if (priorityStr) where.priority = { gte: parseInt(priorityStr) };
     if (readStr !== null) where.read = readStr === 'true';

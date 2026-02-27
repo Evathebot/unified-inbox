@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { requireWorkspace } from '@/lib/auth';
 
 /**
  * GET /api/contacts
@@ -9,15 +10,16 @@ import { prisma } from '@/lib/db';
  */
 export async function GET(request: NextRequest) {
   try {
+    const workspace = await requireWorkspace();
     const searchParams = request.nextUrl.searchParams;
     const query = searchParams.get('q');
-    
+
     const page = parseInt(searchParams.get('page') || '1');
     const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
     const skip = (page - 1) * limit;
-    
-    const where: Record<string, unknown> = {};
-    
+
+    const where: Record<string, unknown> = { workspaceId: workspace.id };
+
     if (query) {
       where.OR = [
         { name: { contains: query } },

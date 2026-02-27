@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Check, X, Bell, Zap, Moon, Sun, RefreshCw, Plug, ExternalLink, Loader2 } from 'lucide-react';
+import { Check, X, Bell, Zap, Moon, Sun, RefreshCw, Plug, ExternalLink, Loader2, LogOut } from 'lucide-react';
 import GlassCard from '@/components/GlassCard';
 import PlatformLogo from '@/components/PlatformLogo';
 
@@ -56,6 +56,9 @@ type BeeperStatus = 'idle' | 'connecting' | 'syncing' | 'synced' | 'sync-error' 
 export default function SettingsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
+
+  // ── Current user ───────────────────────────────────────────
+  const [currentUser, setCurrentUser] = useState<{ name: string; email: string } | null>(null);
 
   // ── Beeper config ──────────────────────────────────────────
   const [beeperConnected, setBeeperConnected] = useState(false);
@@ -114,6 +117,12 @@ export default function SettingsPage() {
       setBeeperStatus('connect-error');
       router.replace('/settings', { scroll: false });
     }
+
+    // Load current user
+    fetch('/api/auth/me')
+      .then(r => r.json())
+      .then(data => { if (data.name) setCurrentUser({ name: data.name, email: data.email }); })
+      .catch(() => {});
 
     // Load Beeper connection info
     fetch('/api/beeper/configure')
@@ -182,6 +191,11 @@ export default function SettingsPage() {
     }
   };
 
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.push('/login');
+  };
+
   const isBusy = beeperStatus === 'connecting' || beeperStatus === 'syncing';
   const isError = beeperStatus === 'connect-error' || beeperStatus === 'sync-error';
 
@@ -196,9 +210,26 @@ export default function SettingsPage() {
     <div className="min-h-screen p-6">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Settings</h1>
-          <p className="text-gray-500">Manage your integrations and preferences</p>
+        <div className="mb-8 flex items-start justify-between">
+          <div>
+            <h1 className="text-4xl font-bold text-gray-900 mb-2">Settings</h1>
+            <p className="text-gray-500">Manage your integrations and preferences</p>
+          </div>
+          {currentUser && (
+            <div className="flex items-center gap-3 mt-1">
+              <div className="text-right">
+                <p className="text-sm font-medium text-gray-900">{currentUser.name}</p>
+                <p className="text-xs text-gray-500">{currentUser.email}</p>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-900 transition-colors px-3 py-2 rounded-lg hover:bg-gray-100"
+              >
+                <LogOut size={14} />
+                Sign out
+              </button>
+            </div>
+          )}
         </div>
 
         {/* ── Beeper Connection ──────────────────────────────── */}

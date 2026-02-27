@@ -1,16 +1,15 @@
 import { NextResponse } from 'next/server';
 import { createHash, randomBytes } from 'crypto';
 import { prisma } from '@/lib/db';
+import { requireWorkspace, AuthError } from '@/lib/auth';
 
 const BEEPER_API_URL = 'http://localhost:23373';
-const REDIRECT_URI = 'http://localhost:3000/api/beeper/callback';
+const REDIRECT_URI = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/beeper/callback`;
 
-/** Generate a PKCE code_verifier (cryptographically random, URL-safe, 64 chars) */
 function generateCodeVerifier(): string {
   return randomBytes(48).toString('base64url');
 }
 
-/** Derive code_challenge = BASE64URL(SHA-256(verifier)) */
 function deriveCodeChallenge(verifier: string): string {
   return createHash('sha256').update(verifier).digest('base64url');
 }
@@ -18,31 +17,15 @@ function deriveCodeChallenge(verifier: string): string {
 /**
  * GET /api/beeper/connect
  *
- * Initiates the Beeper Desktop OAuth flow with PKCE:
- *  1. Ensures a workspace exists (creates one if not)
- *  2. Gets or registers a Beeper OAuth client (stored in workspace.settings)
- *  3. Generates a CSRF state token + PKCE code_verifier / code_challenge
- *  4. Returns the Beeper OAuth authorization URL
- *
- * The frontend redirects the user to that URL. Beeper Desktop shows a consent
- * dialog; on approval it redirects to /api/beeper/callback with a `code`.
+ * Initiates the Beeper Desktop OAuth flow with PKCE for the logged-in user.
+ * The workspaceId is embedded in the state token so /api/beeper/callback can
+ * find the right workspace without a session cookie (the redirect comes from
+ * Beeper, not the user's browser session).
  */
 export async function GET() {
   try {
-    // Ensure a workspace exists (single-user local setup)
-    let workspace = await prisma.workspace.findFirst();
-    if (!workspace) {
-      const user = await prisma.user.upsert({
-        where: { email: 'admin@local' },
-        create: { email: 'admin@local', name: 'Admin' },
-        update: {},
-      });
-      workspace = await prisma.workspace.create({
-        data: { userId: user.id, name: 'My Workspace' },
-      });
-    }
+    const workspace = await requireWorkspace();
 
-    // Load workspace settings JSON
     let settings: Record<string, string> = {};
     try {
       settings = workspace.settings ? JSON.parse(workspace.settings) : {};
@@ -74,12 +57,12 @@ export async function GET() {
       clientId = reg.client_id as string;
     }
 
-    // Generate CSRF state token + PKCE pair
-    const state = randomBytes(16).toString('base64url');
+    // State = <randomToken>.<workspaceId> so callback can look up the right workspace
+    const randomState = randomBytes(16).toString('base64url');
+    const state = `${randomState}.${workspace.id}`;
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = deriveCodeChallenge(codeVerifier);
 
-    // Persist client_id + state + code_verifier in workspace settings
     await prisma.workspace.update({
       where: { id: workspace.id },
       data: {
@@ -92,7 +75,6 @@ export async function GET() {
       },
     });
 
-    // Build the authorization URL (PKCE S256)
     const authUrl = new URL(`${BEEPER_API_URL}/oauth/authorize`);
     authUrl.searchParams.set('client_id', clientId);
     authUrl.searchParams.set('redirect_uri', REDIRECT_URI);
@@ -104,6 +86,9 @@ export async function GET() {
 
     return NextResponse.json({ authUrl: authUrl.toString(), clientId });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
     const msg = error instanceof Error ? error.message : 'Unknown error';
     console.error('[Beeper connect] Error:', msg);
     return NextResponse.json({ error: msg }, { status: 500 });

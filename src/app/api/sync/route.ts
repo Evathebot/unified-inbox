@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { requireWorkspace } from '@/lib/auth';
 import { BeeperService } from '@/lib/services/beeper';
 import { SyncEngine } from '@/lib/services/sync-engine';
 
@@ -59,17 +60,10 @@ async function cleanupContactNames(workspaceId: string): Promise<number> {
 
 /**
  * POST /api/sync — Trigger a full sync from Beeper
- * No body required — uses the first workspace (single-user local tool).
  */
 export async function POST() {
   try {
-    const workspace = await prisma.workspace.findFirst();
-    if (!workspace) {
-      return NextResponse.json(
-        { error: 'No workspace found. Configure Beeper first.' },
-        { status: 404 }
-      );
-    }
+    const workspace = await requireWorkspace();
 
     // Find the Beeper connection for this workspace
     const connection = await prisma.connection.findFirst({
@@ -135,8 +129,7 @@ export async function POST() {
  */
 export async function GET() {
   try {
-    const workspace = await prisma.workspace.findFirst();
-    if (!workspace) return NextResponse.json({ connected: false, stats: {} });
+    const workspace = await requireWorkspace();
 
     const connection = await prisma.connection.findFirst({
       where: { workspaceId: workspace.id, platform: 'beeper' },

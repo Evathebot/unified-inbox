@@ -2,15 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
 const BEEPER_API_URL = 'http://localhost:23373';
-const REDIRECT_URI = 'http://localhost:3000/api/beeper/callback';
+const REDIRECT_URI = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/beeper/callback`;
 
 /**
  * GET /api/beeper/callback
  *
- * Handles the OAuth redirect from Beeper Desktop:
- *  1. Exchanges the authorization code for an access token
- *  2. Saves the token to the Connection record
- *  3. Redirects to /settings?connected=true
+ * Handles the OAuth redirect from Beeper Desktop.
+ * The workspaceId is extracted from the state parameter (set by /connect),
+ * so we can find the right user's workspace without a session cookie.
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -20,25 +19,31 @@ export async function GET(request: NextRequest) {
 
   const settingsUrl = new URL('/settings', request.url);
 
-  // User denied authorization in Beeper
   if (errorParam) {
     settingsUrl.searchParams.set('beeper_error', 'authorization_denied');
     return NextResponse.redirect(settingsUrl);
   }
 
-  if (!code) {
+  if (!code || !state) {
     settingsUrl.searchParams.set('beeper_error', 'no_code');
     return NextResponse.redirect(settingsUrl);
   }
 
   try {
-    const workspace = await prisma.workspace.findFirst();
+    // Extract workspaceId from state: format is "<randomToken>.<workspaceId>"
+    const dotIndex = state.lastIndexOf('.');
+    if (dotIndex === -1) {
+      settingsUrl.searchParams.set('beeper_error', 'invalid_state');
+      return NextResponse.redirect(settingsUrl);
+    }
+    const workspaceId = state.slice(dotIndex + 1);
+
+    const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId } });
     if (!workspace) {
       settingsUrl.searchParams.set('beeper_error', 'no_workspace');
       return NextResponse.redirect(settingsUrl);
     }
 
-    // Load workspace settings
     let settings: Record<string, string> = {};
     try {
       settings = workspace.settings ? JSON.parse(workspace.settings) : {};
@@ -51,32 +56,29 @@ export async function GET(request: NextRequest) {
     }
 
     // CSRF: verify state matches what we stored
-    if (state && settings.beeperOAuthState && state !== settings.beeperOAuthState) {
+    if (settings.beeperOAuthState && state !== settings.beeperOAuthState) {
       console.warn('[Beeper callback] State mismatch — possible CSRF');
       settingsUrl.searchParams.set('beeper_error', 'invalid_state');
       return NextResponse.redirect(settingsUrl);
     }
 
-    // PKCE: include code_verifier stored during /connect
     const codeVerifier = settings.beeperCodeVerifier;
     if (!codeVerifier) {
-      console.warn('[Beeper callback] No code_verifier found — was /connect called first?');
       settingsUrl.searchParams.set('beeper_error', 'no_code_verifier');
       return NextResponse.redirect(settingsUrl);
     }
 
     // Exchange authorization code for access token
-    const tokenParams: Record<string, string> = {
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: REDIRECT_URI,
-      client_id: clientId,
-      code_verifier: codeVerifier,
-    };
     const tokenRes = await fetch(`${BEEPER_API_URL}/oauth/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams(tokenParams),
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: REDIRECT_URI,
+        client_id: clientId,
+        code_verifier: codeVerifier,
+      }),
     });
 
     if (!tokenRes.ok) {
@@ -94,7 +96,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(settingsUrl);
     }
 
-    // Save / update the Beeper Connection record
+    // Save / update this workspace's Beeper Connection
     const existing = await prisma.connection.findFirst({
       where: { workspaceId: workspace.id, platform: 'beeper' },
     });
@@ -116,14 +118,13 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Clear the one-time OAuth state + PKCE verifier from workspace settings
-    const { beeperOAuthState: _drop, beeperCodeVerifier: _drop2, ...remainingSettings } = settings;
+    // Clean up one-time OAuth state + PKCE verifier
+    const { beeperOAuthState: _s, beeperCodeVerifier: _v, ...remaining } = settings;
     await prisma.workspace.update({
       where: { id: workspace.id },
-      data: { settings: JSON.stringify(remainingSettings) },
+      data: { settings: JSON.stringify(remaining) },
     });
 
-    // Redirect back to settings with success flag
     settingsUrl.searchParams.set('connected', 'true');
     return NextResponse.redirect(settingsUrl);
   } catch (error) {

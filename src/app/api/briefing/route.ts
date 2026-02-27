@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { requireWorkspace } from '@/lib/auth';
 import { extractActionItems } from '@/lib/ai';
 
 /**
@@ -10,13 +11,14 @@ import { extractActionItems } from '@/lib/ai';
  */
 export async function GET(request: NextRequest) {
   try {
+    const workspace = await requireWorkspace();
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
     // Get top 5 priority messages
     const priorityMessages = await prisma.message.findMany({
-      where: { read: false },
+      where: { workspaceId: workspace.id, read: false },
       orderBy: { priority: 'desc' },
       take: 5,
       include: {
@@ -34,6 +36,7 @@ export async function GET(request: NextRequest) {
     // Find overdue replies (messages from contacts with no response >24h)
     const overdueMessages = await prisma.message.findMany({
       where: {
+        workspaceId: workspace.id,
         timestamp: { lt: oneDayAgo },
         read: false,
       },
@@ -52,6 +55,7 @@ export async function GET(request: NextRequest) {
     // Today's calendar events with contact info
     const todayEvents = await prisma.calendarEvent.findMany({
       where: {
+        workspaceId: workspace.id,
         startTime: {
           gte: todayStart,
           lt: new Date(todayStart.getTime() + 24 * 60 * 60 * 1000),
@@ -71,6 +75,7 @@ export async function GET(request: NextRequest) {
     // Extract action items from recent high-priority messages
     const recentMessages = await prisma.message.findMany({
       where: {
+        workspaceId: workspace.id,
         timestamp: { gte: oneDayAgo },
         priority: { gte: 70 },
       },
@@ -94,12 +99,10 @@ export async function GET(request: NextRequest) {
     // Stats
     const [totalToday, unreadCount] = await Promise.all([
       prisma.message.count({
-        where: {
-          timestamp: { gte: todayStart },
-        },
+        where: { workspaceId: workspace.id, timestamp: { gte: todayStart } },
       }),
       prisma.message.count({
-        where: { read: false },
+        where: { workspaceId: workspace.id, read: false },
       }),
     ]);
 

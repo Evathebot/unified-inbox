@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { requireWorkspace } from '@/lib/auth';
 import { BeeperService } from '@/lib/services/beeper';
 
 /**
@@ -28,11 +29,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'senderName, channel, and text are required' }, { status: 400 });
     }
 
-    // --- Step 1: Find an active Beeper connection (single-user: just take first workspace) ---
-    const workspace = await prisma.workspace.findFirst();
-    if (!workspace) {
-      return NextResponse.json({ success: true, demo: true, reason: 'no_workspace' });
-    }
+    // --- Step 1: Find an active Beeper connection ---
+    const workspace = await requireWorkspace();
 
     const connection = await prisma.connection.findFirst({
       where: { workspaceId: workspace.id, platform: 'beeper', status: 'active' },
