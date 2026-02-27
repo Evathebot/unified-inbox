@@ -1,3 +1,10 @@
+/**
+ * POST /api/auth/login
+ *
+ * Authenticates a user by email + password, creates a session, and sets
+ * an httpOnly `session` cookie. Returns `{ ok: true }` on success or a
+ * 401 JSON error on invalid credentials.
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyPassword, createSession } from '@/lib/auth';

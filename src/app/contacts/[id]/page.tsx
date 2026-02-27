@@ -4,6 +4,7 @@ import GlassCard from '@/components/GlassCard';
 import ChannelBadge from '@/components/ChannelBadge';
 import PersonalityProfile from '@/components/PersonalityProfile';
 import MessageCard from '@/components/MessageCard';
+import ContactAISummary from '@/components/ContactAISummary';
 import { getContactWithPersonality, getMessages } from '@/lib/data';
 import { getRelativeTime } from '@/lib/mockData';
 
@@ -78,17 +79,11 @@ export default async function ContactProfilePage({ params }: ContactProfilePageP
               </div>
             </div>
 
-            {/* Relationship score */}
-            <div className="text-right shrink-0">
-              <p className="text-3xl font-bold text-gray-900">{contact.relationshipScore}%</p>
-              <p className="text-xs text-gray-500">Relationship</p>
-              <div className="h-1.5 w-20 bg-gray-200 rounded-full overflow-hidden mt-1">
-                <div
-                  className="h-full bg-orange-400 rounded-full"
-                  style={{ width: `${contact.relationshipScore}%` }}
-                />
-              </div>
-            </div>
+            {/* AI Contact Summary */}
+            <ContactAISummary
+              contactId={contact.id}
+              existingPersonality={contact.personality}
+            />
           </div>
         </GlassCard>
 

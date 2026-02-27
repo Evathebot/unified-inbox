@@ -1,3 +1,10 @@
+/**
+ * GET /api/auth/me
+ *
+ * Returns the currently authenticated user's basic profile
+ * (`{ id, name, email }`) or a 401 if the session cookie is absent/expired.
+ * Used by the client to verify auth state on load.
+ */
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 

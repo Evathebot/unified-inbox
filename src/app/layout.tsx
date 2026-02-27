@@ -21,6 +21,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      {/* Apply saved dark mode preference before first paint to prevent flash */}
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='dark')document.documentElement.classList.add('dark');}catch(e){}})();` }} />
+      </head>
       <body className={`${geistSans.variable} antialiased bg-gray-50 text-gray-900`}>
         <div className="flex h-screen overflow-hidden">
           {/* Sidebar - narrow icon bar */}

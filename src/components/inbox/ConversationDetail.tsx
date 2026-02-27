@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { Phone, Video, MoreHorizontal, SmilePlus, Forward, Copy, Check, X } from 'lucide-react';
 import Avatar from '@/components/Avatar';
 import ChannelBadge from '@/components/ChannelBadge';
 import ChannelContextBadge from '@/components/ChannelContextBadge';
@@ -9,6 +10,25 @@ import { getRelativeTime, Message } from '@/lib/mockData';
 import { ConversationGroup } from './types';
 import ReplyToolbar from './ReplyToolbar';
 
+/**
+ * Detail panel for the selected conversation group (right two-thirds of the inbox).
+ *
+ * Renders messages in the native style of the source channel:
+ * - **Slack** — white background, avatar + sender name on the first message of
+ *   each consecutive run, timestamp per message, "N replies" thread links that
+ *   open a right-side ThreadPanel.
+ * - **WhatsApp / Telegram** — iMessage-style colour bubbles (outgoing right,
+ *   incoming left).
+ * - **Gmail** — full-width email card layout with subject line.
+ *
+ * Additional features:
+ * - AI Summary banner (dismissable)
+ * - AI-generated draft reply (editable before sending)
+ * - Quick emoji reactions (hover to reveal)
+ * - Message copy / forward actions
+ * - Reply toolbar with emoji picker, file attach, and voice record buttons
+ * - Slack ThreadPanel that slides in from the right when a thread is opened
+ */
 interface ConversationDetailProps {
   group: ConversationGroup;
 }
@@ -42,44 +62,230 @@ function groupByDay(messages: Message[]): Array<{ date: Date; messages: Message[
   return result;
 }
 
-export default function ConversationDetail({ group }: ConversationDetailProps) {
-  // ── Local (optimistically sent) messages ─────────────────
-  const [localMessages, setLocalMessages] = useState<Message[]>([]);
+/** Convert mxc://server/mediaId → Beeper Matrix media download URL */
+function convertMxcUrl(mxc: string): string {
+  const withoutScheme = mxc.slice('mxc://'.length);
+  const slashIdx = withoutScheme.indexOf('/');
+  if (slashIdx === -1) return mxc;
+  const server = withoutScheme.slice(0, slashIdx);
+  const mediaId = withoutScheme.slice(slashIdx + 1);
+  return `https://matrix.beeper.com/_matrix/media/v3/download/${server}/${mediaId}`;
+}
 
-  // ── AI Summary ───────────────────────────────────────────
+function isImageUrl(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.startsWith('mxc://')) return true;
+  return /^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(trimmed);
+}
+
+function resolveImageSrc(text: string): string {
+  const trimmed = text.trim();
+  return trimmed.startsWith('mxc://') ? convertMxcUrl(trimmed) : trimmed;
+}
+
+const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍'];
+
+interface MessageReactions {
+  [msgId: string]: { [emoji: string]: number };
+}
+
+interface HoverActionsProps {
+  isMe: boolean;
+  msgId: string;
+  text: string;
+  reactions: { [emoji: string]: number };
+  onReact: (emoji: string) => void;
+  onForward: () => void;
+  onCopy: () => void;
+  slackLayout?: boolean;
+}
+
+function HoverActions({ isMe, text, reactions, onReact, onForward, onCopy, slackLayout }: HoverActionsProps) {
+  const [showPicker, setShowPicker] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text).catch(() => {});
+    setCopied(true);
+    onCopy();
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  const positionClass = slackLayout
+    ? 'absolute right-4 -top-4 flex items-center gap-0.5 bg-white border border-gray-200 rounded-lg shadow-md px-0.5 py-0.5'
+    : `absolute ${isMe ? 'right-full mr-2' : 'left-full ml-2'} top-0 flex items-center gap-1`;
+
+  const btnClass = slackLayout
+    ? 'w-7 h-7 rounded flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors'
+    : 'w-7 h-7 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors';
+
+  return (
+    <div className={`${positionClass} opacity-0 group-hover/msg:opacity-100 transition-opacity duration-150 z-20`}>
+      {/* Quick reaction picker */}
+      <div className="relative">
+        <button onClick={() => setShowPicker(p => !p)} className={btnClass} title="React">
+          <SmilePlus size={14} />
+        </button>
+        {showPicker && (
+          <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-2xl shadow-lg p-1.5 flex gap-1 z-30">
+            {QUICK_REACTIONS.map(emoji => (
+              <button
+                key={emoji}
+                onClick={() => { onReact(emoji); setShowPicker(false); }}
+                className="w-8 h-8 rounded-xl hover:bg-gray-100 flex items-center justify-center text-lg transition-colors"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Forward */}
+      <button onClick={onForward} className={btnClass} title="Forward">
+        <Forward size={13} />
+      </button>
+
+      {/* Copy */}
+      <button onClick={handleCopy} className={btnClass} title="Copy">
+        {copied ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
+      </button>
+    </div>
+  );
+}
+
+// ── Slack Thread Panel ───────────────────────────────────────────────────────
+
+interface ThreadPanelProps {
+  parentMsg: Message;
+  onClose: () => void;
+}
+
+function ThreadPanel({ parentMsg, onClose }: ThreadPanelProps) {
+  const [replyText, setReplyText] = useState('');
+  const replies = parentMsg.thread?.messages ?? [];
+
+  return (
+    <div className="w-[340px] shrink-0 border-l border-gray-200 bg-white flex flex-col h-full">
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between shrink-0">
+        <div>
+          <h3 className="text-sm font-bold text-gray-900">Thread</h3>
+          {parentMsg.channelContext?.channelName && (
+            <p className="text-xs text-gray-400">{parentMsg.channelContext.channelName}</p>
+          )}
+        </div>
+        <button
+          onClick={onClose}
+          className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <X size={15} />
+        </button>
+      </div>
+
+      {/* Parent message */}
+      <div className="px-4 py-3 border-b border-gray-100 shrink-0">
+        <div className="flex items-start gap-3">
+          <Avatar src={parentMsg.sender.avatar} name={parentMsg.sender.name} size="sm" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline gap-2 mb-0.5">
+              <span className="text-sm font-semibold text-gray-900">{parentMsg.sender.name}</span>
+              <span className="text-[11px] text-gray-400">{formatTime(parentMsg.timestamp)}</span>
+            </div>
+            <p className="text-sm text-gray-800 leading-relaxed break-words">{parentMsg.preview}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Replies list */}
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+        {replies.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-gray-500">
+              {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
+            </span>
+            <div className="flex-1 h-px bg-gray-200" />
+          </div>
+        )}
+
+        {replies.map((reply, i) => (
+          <div key={i} className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-[11px] font-semibold text-gray-600 shrink-0">
+              {reply.from.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-2 mb-0.5">
+                <span className="text-sm font-semibold text-gray-900">{reply.from}</span>
+                <span className="text-[11px] text-gray-400">{formatTime(reply.timestamp)}</span>
+              </div>
+              <p className="text-sm text-gray-800 leading-relaxed break-words">{reply.content}</p>
+            </div>
+          </div>
+        ))}
+
+        {replies.length === 0 && (
+          <p className="text-sm text-gray-400 text-center py-4">No replies yet. Start the thread!</p>
+        )}
+      </div>
+
+      {/* Reply input */}
+      <div className="px-3 pb-3 pt-2 border-t border-gray-100 shrink-0">
+        <div className="flex items-end gap-2">
+          <textarea
+            value={replyText}
+            onChange={e => setReplyText(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                setReplyText('');
+              }
+            }}
+            placeholder="Reply in thread..."
+            rows={2}
+            className="flex-1 resize-none px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white placeholder-gray-400"
+          />
+          <button
+            disabled={!replyText.trim()}
+            className="px-3 py-2 text-sm bg-[#1264a3] text-white rounded-xl hover:bg-[#0b4f8a] disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-medium"
+          >
+            Send
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ───────────────────────────────────────────────────────────
+
+export default function ConversationDetail({ group }: ConversationDetailProps) {
+  const [localMessages, setLocalMessages] = useState<Message[]>([]);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryDismissed, setSummaryDismissed] = useState(false);
-
-  // ── AI Draft ─────────────────────────────────────────────
   const [aiDraft, setAiDraft] = useState<string>('');
   const [draftLoading, setDraftLoading] = useState(true);
+  const [reactions, setReactions] = useState<MessageReactions>({});
+  const [forwardToast, setForwardToast] = useState<string | null>(null);
+  const [selectedThread, setSelectedThread] = useState<Message | null>(null);
 
-  // Ref to scroll the thread to the bottom after new messages
   const threadBottomRef = useRef<HTMLDivElement>(null);
-
-  // Use a ref-based key so we can cancel stale fetches when the conversation changes
   const conversationKey = `${group.senderName}|${group.channel}`;
   const currentKeyRef = useRef(conversationKey);
 
   useEffect(() => {
     currentKeyRef.current = conversationKey;
-
-    // Reset all state for the new conversation
     setLocalMessages([]);
     setAiSummary(null);
     setSummaryLoading(true);
     setSummaryDismissed(false);
     setAiDraft('');
     setDraftLoading(true);
+    setReactions({});
+    setSelectedThread(null);
 
     const key = conversationKey;
-
-    // ── Fetch AI summary ────────────────────────────────────
-    const messages = group.messages.map(m => ({
-      sender: m.sender.name,
-      body: m.preview,
-    }));
+    const messages = group.messages.map(m => ({ sender: m.sender.name, body: m.preview }));
 
     fetch('/api/ai/summarize', {
       method: 'POST',
@@ -88,16 +294,12 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
     })
       .then(r => r.json())
       .then(d => {
-        if (currentKeyRef.current !== key) return; // stale
+        if (currentKeyRef.current !== key) return;
         setAiSummary(d.summary || null);
         setSummaryLoading(false);
       })
-      .catch(() => {
-        if (currentKeyRef.current !== key) return;
-        setSummaryLoading(false);
-      });
+      .catch(() => { if (currentKeyRef.current !== key) return; setSummaryLoading(false); });
 
-    // ── Fetch AI draft ──────────────────────────────────────
     const latestMsg = group.messages[group.messages.length - 1];
     if (latestMsg?.id) {
       fetch('/api/ai/draft', {
@@ -113,7 +315,7 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
         })
         .catch(() => {
           if (currentKeyRef.current !== key) return;
-          setAiDraft('Thank you for your message. I\'ll get back to you shortly.');
+          setAiDraft('');
           setDraftLoading(false);
         });
     } else {
@@ -122,7 +324,6 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationKey]);
 
-  // Scroll to bottom whenever local messages (sent by user) are added
   useEffect(() => {
     if (localMessages.length > 0) {
       threadBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -141,10 +342,9 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
     })
       .then(r => r.json())
       .then(d => { setAiDraft(d.draft || ''); setDraftLoading(false); })
-      .catch(() => { setAiDraft('Thank you for your message. I\'ll get back to you shortly.'); setDraftLoading(false); });
+      .catch(() => { setAiDraft(''); setDraftLoading(false); });
   };
 
-  // Add a sent message to the local (optimistic) list
   const addLocalMessage = useCallback((text: string) => {
     const msg: Message = {
       id: `local-${Date.now()}`,
@@ -168,170 +368,406 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
       body: JSON.stringify({ senderName: group.senderName, channel: group.channel, text }),
     })
       .then(r => r.json())
-      .then(d => {
-        if (!d.demo) addLocalMessage(text);
-        // If d.demo, Beeper isn't connected — ReplyToolbar surfaces this;
-        // AIReplyBox already shows "Sent!" optimistically which is acceptable UX.
-      })
+      .then(d => { if (!d.demo) addLocalMessage(text); })
       .catch(() => {});
   };
 
+  const handleReact = (msgId: string, emoji: string) => {
+    setReactions(prev => ({
+      ...prev,
+      [msgId]: {
+        ...(prev[msgId] || {}),
+        [emoji]: ((prev[msgId] || {})[emoji] || 0) + 1,
+      },
+    }));
+  };
+
+  const handleForward = (text: string) => {
+    setForwardToast(text.slice(0, 40) + (text.length > 40 ? '…' : ''));
+    setTimeout(() => setForwardToast(null), 2500);
+  };
+
+  const channelLabel = group.channel === 'gmail' ? 'Gmail'
+    : group.channel === 'whatsapp' ? 'WhatsApp'
+    : group.channel === 'telegram' ? 'Telegram'
+    : group.channel === 'slack' ? 'Slack'
+    : group.channel;
+
   const allMessages = [...group.messages, ...localMessages];
   const dayGroups = groupByDay(allMessages);
+  const lastMyMsgId = [...allMessages].reverse().find(m => m.sender.name === 'Me')?.id;
 
   return (
-    <>
-      {/* Slim header */}
-      <div className="px-4 py-3 bg-white border-b border-gray-100 flex items-center gap-3 shrink-0">
-        <Avatar src={group.senderAvatar} name={group.senderName} size="md" online={group.senderOnline} />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-gray-900 truncate">{group.senderName}</h2>
-            <ChannelBadge channel={group.channel} size="sm" />
-          </div>
-          {group.channelContext && !group.channelContext.isDM ? (
-            <ChannelContextBadge channel={group.channel} context={group.channelContext} compact />
-          ) : (
-            <p className="text-xs text-gray-400">{getRelativeTime(group.latestTimestamp)}</p>
-          )}
-        </div>
-        {group.topicLabel && (
-          <span className={`shrink-0 px-2 py-0.5 rounded-md text-xs font-medium ${group.topicColor || 'bg-gray-100 text-gray-600'}`}>
-            {group.topicLabel}
-          </span>
-        )}
-      </div>
+    <div className="flex flex-1 overflow-hidden h-full">
+      {/* ── Main conversation column ──────────────────────── */}
+      <div className="flex flex-col flex-1 overflow-hidden min-w-0">
 
-      {/* ── AI Summary Banner ─────────────────────────────── */}
-      {!summaryDismissed && (summaryLoading || aiSummary) && (
-        <div className="px-4 py-2.5 bg-gradient-to-r from-purple-50 via-pink-50 to-orange-50 border-b border-purple-100 flex items-start gap-2.5 shrink-0">
-          <div className="ai-orb relative shrink-0 mt-0.5" style={{ width: 14, height: 14 }}>
-            <div className="ai-orb-glow"></div>
-          </div>
-          {summaryLoading ? (
-            <div className="flex-1 space-y-1.5 py-0.5">
-              <div className="h-2.5 bg-purple-100 rounded animate-pulse w-full" />
-              <div className="h-2.5 bg-purple-100 rounded animate-pulse w-3/4" />
+        {/* ── Header ──────────────────────────────────────────── */}
+        <div className="px-4 py-3 bg-white border-b border-gray-100 flex items-center gap-3 shrink-0">
+          <Avatar src={group.senderAvatar} name={group.senderName} size="md" online={group.senderOnline} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-gray-900 truncate">{group.senderName}</h2>
+              <ChannelBadge channel={group.channel} size="sm" />
             </div>
-          ) : (
-            <p className="flex-1 text-xs text-gray-600 leading-relaxed">
-              <span className="font-semibold ai-text-gradient">AI Summary · </span>
-              {aiSummary}
-            </p>
+            {group.channelContext && !group.channelContext.isDM ? (
+              <ChannelContextBadge channel={group.channel} context={group.channelContext} compact />
+            ) : (
+              <p className="text-xs text-gray-400">
+                {group.senderOnline ? (
+                  <span className="text-green-500 font-medium">Online</span>
+                ) : (
+                  getRelativeTime(group.latestTimestamp)
+                )}
+              </p>
+            )}
+          </div>
+
+          {group.topicLabel && (
+            <span className={`shrink-0 px-2 py-0.5 rounded-md text-xs font-medium ${group.topicColor || 'bg-gray-100 text-gray-600'}`}>
+              {group.topicLabel}
+            </span>
           )}
-          {!summaryLoading && (
-            <button
-              onClick={() => setSummaryDismissed(true)}
-              className="shrink-0 text-gray-300 hover:text-gray-500 text-xs leading-none mt-0.5 transition-colors"
-              aria-label="Dismiss"
-            >
-              ✕
+
+          {/* Action icons */}
+          <div className="flex items-center gap-1 shrink-0">
+            <button className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-500 hover:text-gray-700 transition-colors" title="Voice call">
+              <Phone size={16} />
             </button>
-          )}
+            <button className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-500 hover:text-gray-700 transition-colors" title="Video call">
+              <Video size={16} />
+            </button>
+            <button className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-500 hover:text-gray-700 transition-colors" title="More options">
+              <MoreHorizontal size={16} />
+            </button>
+          </div>
         </div>
-      )}
 
-      {/* Chat thread */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1 bg-gray-50">
-        {dayGroups.map(({ date, messages: dayMsgs }) => (
-          <div key={date.toISOString()}>
-            {/* Date separator */}
-            <div className="flex items-center gap-3 my-4">
-              <div className="flex-1 h-px bg-gray-200" />
-              <span className="text-[11px] text-gray-400 font-medium shrink-0">{formatDateSeparator(date)}</span>
-              <div className="flex-1 h-px bg-gray-200" />
+        {/* ── AI Summary Banner ─────────────────────────────── */}
+        {!summaryDismissed && (summaryLoading || aiSummary) && (
+          <div className="px-4 py-2.5 bg-gradient-to-r from-purple-50 via-pink-50 to-orange-50 border-b border-purple-100 flex items-start gap-2.5 shrink-0">
+            <div className="ai-orb relative shrink-0 mt-0.5" style={{ width: 14, height: 14 }}>
+              <div className="ai-orb-glow"></div>
             </div>
+            {summaryLoading ? (
+              <div className="flex-1 space-y-1.5 py-0.5">
+                <div className="h-2.5 bg-purple-100 rounded animate-pulse w-full" />
+                <div className="h-2.5 bg-purple-100 rounded animate-pulse w-3/4" />
+              </div>
+            ) : (
+              <p className="flex-1 text-xs text-gray-600 leading-relaxed">
+                <span className="font-semibold ai-text-gradient">AI Summary · </span>
+                {aiSummary}
+              </p>
+            )}
+            {!summaryLoading && (
+              <button
+                onClick={() => setSummaryDismissed(true)}
+                className="shrink-0 text-gray-300 hover:text-gray-500 text-xs leading-none mt-0.5 transition-colors"
+                aria-label="Dismiss"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
 
-            {/* Messages for this day */}
-            <div className="space-y-1">
-              {dayMsgs.map((msg, idx) => {
-                const isMe = msg.sender.name === 'Me';
-                const isFirst = idx === 0 || dayMsgs[idx - 1].sender.name !== msg.sender.name;
-                const isLast = idx === dayMsgs.length - 1 || dayMsgs[idx + 1].sender.name !== msg.sender.name;
+        {/* ── Chat thread ───────────────────────────────────── */}
+        <div className={`flex-1 overflow-y-auto py-4 space-y-1 ${group.channel === 'slack' ? 'px-0 bg-white' : 'px-4 bg-[#f0f2f5]'}`}>
+          {dayGroups.map(({ date, messages: dayMsgs }) => (
+            <div key={date.toISOString()}>
+              <div className={`flex items-center gap-3 my-4 ${group.channel === 'slack' ? 'px-4' : ''}`}>
+                <div className="flex-1 h-px bg-gray-300/60" />
+                <span className={`text-[11px] text-gray-400 font-medium shrink-0 px-2 ${group.channel === 'slack' ? 'bg-white' : 'bg-[#f0f2f5]'}`}>{formatDateSeparator(date)}</span>
+                <div className="flex-1 h-px bg-gray-300/60" />
+              </div>
 
-                if (isMe) {
-                  // ── Outgoing (right-aligned) ───────────────
-                  return (
-                    <div key={msg.id || idx} className={`flex items-end justify-end gap-2 ${isFirst ? 'mt-2' : 'mt-0.5'}`}>
-                      <div className="max-w-[72%] flex flex-col items-end">
-                        {isFirst && (
-                          <p className="text-[11px] text-gray-400 font-medium mb-1 mr-1">You</p>
-                        )}
-                        <div className={`
-                          px-3.5 py-2.5 text-sm text-white leading-relaxed shadow-sm ai-badge
-                          ${isFirst && isLast ? 'rounded-2xl rounded-br-sm' : ''}
-                          ${isFirst && !isLast ? 'rounded-2xl rounded-br-sm rounded-b-lg' : ''}
-                          ${!isFirst && !isLast ? 'rounded-lg rounded-r-sm' : ''}
-                          ${!isFirst && isLast ? 'rounded-2xl rounded-tr-sm rounded-t-lg rounded-br-sm' : ''}
-                        `}>
-                          {msg.preview}
+              <div className={group.channel === 'slack' ? 'space-y-0' : 'space-y-0.5'}>
+                {dayMsgs.map((msg, idx) => {
+                  const isMe = msg.sender.name === 'Me';
+                  const isFirst = idx === 0 || dayMsgs[idx - 1].sender.name !== msg.sender.name;
+                  const isLast = idx === dayMsgs.length - 1 || dayMsgs[idx + 1].sender.name !== msg.sender.name;
+                  const isLastMyMsg = msg.id === lastMyMsgId;
+                  const msgReactions = reactions[msg.id || String(idx)] || {};
+                  const hasReactions = Object.keys(msgReactions).length > 0;
+                  const msgId = msg.id || String(idx);
+                  const isImage = isImageUrl(msg.preview);
+                  const threadCount = msg.thread?.messages?.length ?? 0;
+                  const isThreadOpen = selectedThread?.id === msg.id;
+
+                  // ── Slack-style layout ─────────────────────────────
+                  if (group.channel === 'slack') {
+                    return (
+                      <div
+                        key={msgId}
+                        className={`flex items-start gap-3 px-4 py-0.5 transition-colors relative group/msg ${isFirst ? 'mt-3 pt-1' : ''} ${isThreadOpen ? 'bg-[#fff8e1]' : 'hover:bg-gray-50'}`}
+                      >
+                        {/* Avatar column — always visible on first msg, spacer on subsequent */}
+                        <div className="w-9 shrink-0 flex items-start pt-0.5">
+                          {isFirst ? (
+                            <Avatar src={msg.sender.avatar} name={msg.sender.name} size="sm" />
+                          ) : (
+                            <span className="w-9 text-[10px] text-gray-300 text-right leading-5 opacity-0 group-hover/msg:opacity-100 transition-opacity select-none">
+                              {formatTime(msg.timestamp)}
+                            </span>
+                          )}
                         </div>
+
+                        {/* Message body */}
+                        <div className="flex-1 min-w-0 relative">
+                          <HoverActions
+                            isMe={isMe}
+                            msgId={msgId}
+                            text={msg.preview}
+                            reactions={msgReactions}
+                            onReact={(emoji) => handleReact(msgId, emoji)}
+                            onForward={() => handleForward(msg.preview)}
+                            onCopy={() => {}}
+                            slackLayout
+                          />
+
+                          {isFirst && (
+                            <div className="flex items-baseline gap-2 mb-0.5">
+                              <span className={`text-sm font-semibold ${isMe ? 'text-blue-600' : 'text-gray-900'}`}>
+                                {isMe ? 'You' : msg.sender.name}
+                              </span>
+                              <span className="text-[11px] text-gray-400">{formatTime(msg.timestamp)}</span>
+                              {msg.subject && (
+                                <span className="text-[11px] text-gray-400 italic">{msg.subject}</span>
+                              )}
+                            </div>
+                          )}
+
+                          {isImage ? (
+                            <img
+                              src={resolveImageSrc(msg.preview)}
+                              alt="Shared image"
+                              className="max-w-xs rounded-lg shadow-sm object-cover mt-1"
+                              style={{ maxHeight: 280 }}
+                            />
+                          ) : (
+                            <p className="text-sm text-gray-800 leading-relaxed break-words">{msg.preview}</p>
+                          )}
+
+                          {hasReactions && (
+                            <div className="flex gap-1 mt-1 flex-wrap">
+                              {Object.entries(msgReactions).map(([emoji, count]) => (
+                                <button
+                                  key={emoji}
+                                  onClick={() => handleReact(msgId, emoji)}
+                                  className="flex items-center gap-0.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-md px-1.5 py-0.5 text-xs transition-colors"
+                                >
+                                  <span>{emoji}</span>
+                                  <span className="text-gray-600 text-[10px] ml-0.5">{count}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Thread replies link — like real Slack */}
+                          {threadCount > 0 && (
+                            <button
+                              onClick={() => setSelectedThread(isThreadOpen ? null : msg)}
+                              className={`flex items-center gap-1.5 mt-1.5 text-[12px] font-medium rounded px-1 py-0.5 -ml-1 transition-colors ${
+                                isThreadOpen
+                                  ? 'text-[#1264a3] bg-[#e8f0f8]'
+                                  : 'text-[#1264a3] hover:bg-gray-100'
+                              }`}
+                            >
+                              <span>{threadCount} {threadCount === 1 ? 'reply' : 'replies'}</span>
+                              <span className="text-gray-400 font-normal">
+                                · Last reply {formatTime(msg.thread!.messages[threadCount - 1].timestamp)}
+                              </span>
+                              <span className="text-[#1264a3] text-[11px]">View thread →</span>
+                            </button>
+                          )}
+
+                          {isMe && isLastMyMsg && isLast && (
+                            <p className="text-[10px] text-gray-400 mt-0.5">Sent</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // ── iMessage-style bubbles (all other channels) ────
+                  if (isMe) {
+                    return (
+                      <div key={msgId} className={`flex items-end justify-end gap-2 ${isFirst ? 'mt-3' : 'mt-0.5'}`}>
+                        <div className="max-w-[72%] flex flex-col items-end relative group/msg">
+                          <HoverActions
+                            isMe
+                            msgId={msgId}
+                            text={msg.preview}
+                            reactions={msgReactions}
+                            onReact={(emoji) => handleReact(msgId, emoji)}
+                            onForward={() => handleForward(msg.preview)}
+                            onCopy={() => {}}
+                          />
+
+                          {isFirst && (
+                            <p className="text-[11px] text-gray-400 font-medium mb-1 mr-1">You</p>
+                          )}
+
+                          {isImage ? (
+                            <img
+                              src={resolveImageSrc(msg.preview)}
+                              alt="Shared image"
+                              className={`max-w-full rounded-2xl rounded-br-sm shadow-sm object-cover`}
+                              style={{ maxHeight: 280 }}
+                            />
+                          ) : (
+                            <div className={`
+                              px-3.5 py-2.5 text-sm text-white leading-relaxed shadow-sm
+                              bg-[#0b5cff]
+                              ${isFirst && isLast ? 'rounded-2xl rounded-br-md' : ''}
+                              ${isFirst && !isLast ? 'rounded-2xl rounded-br-sm rounded-b-lg' : ''}
+                              ${!isFirst && !isLast ? 'rounded-lg rounded-r-sm' : ''}
+                              ${!isFirst && isLast ? 'rounded-2xl rounded-tr-sm rounded-t-lg rounded-br-md' : ''}
+                            `}>
+                              {msg.preview}
+                            </div>
+                          )}
+
+                          {/* Reactions bubble */}
+                          {hasReactions && (
+                            <div className="flex gap-0.5 mt-1 mr-1">
+                              {Object.entries(msgReactions).map(([emoji, count]) => (
+                                <button
+                                  key={emoji}
+                                  onClick={() => handleReact(msgId, emoji)}
+                                  className="flex items-center gap-0.5 bg-white border border-gray-200 rounded-full px-1.5 py-0.5 text-xs shadow-sm hover:bg-gray-50 transition-colors"
+                                >
+                                  <span>{emoji}</span>
+                                  {count > 1 && <span className="text-gray-500 text-[10px]">{count}</span>}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Sent status */}
+                          {isLast && (
+                            <div className="flex items-center gap-1 mt-0.5 mr-1">
+                              <p className="text-[10px] text-gray-400">{formatTime(msg.timestamp)}</p>
+                              {isLastMyMsg && (
+                                <span className="text-[10px] text-gray-400">· Sent</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={msgId} className={`flex items-end gap-2 ${isFirst ? 'mt-3' : 'mt-0.5'}`}>
+                      <div className="w-8 shrink-0 flex items-end">
+                        {isLast ? (
+                          <Avatar src={msg.sender.avatar} name={msg.sender.name} size="sm" />
+                        ) : (
+                          <div className="w-8" />
+                        )}
+                      </div>
+
+                      <div className="max-w-[72%] flex flex-col relative group/msg">
+                        <HoverActions
+                          isMe={false}
+                          msgId={msgId}
+                          text={msg.preview}
+                          reactions={msgReactions}
+                          onReact={(emoji) => handleReact(msgId, emoji)}
+                          onForward={() => handleForward(msg.preview)}
+                          onCopy={() => {}}
+                        />
+
+                        {isFirst && (
+                          <p className="text-[11px] text-gray-500 font-medium mb-1 ml-1">{msg.sender.name}</p>
+                        )}
+                        {msg.subject && isFirst && (
+                          <p className="text-[11px] text-gray-500 font-medium mb-1 ml-1 italic">{msg.subject}</p>
+                        )}
+
+                        {isImage ? (
+                          <img
+                            src={resolveImageSrc(msg.preview)}
+                            alt="Shared image"
+                            className="max-w-full rounded-2xl rounded-bl-sm shadow-sm object-cover"
+                            style={{ maxHeight: 280 }}
+                          />
+                        ) : (
+                          <div className={`
+                            px-3.5 py-2.5 text-sm text-gray-800 leading-relaxed shadow-sm
+                            bg-white border border-gray-100
+                            ${isFirst && isLast ? 'rounded-2xl rounded-bl-md' : ''}
+                            ${isFirst && !isLast ? 'rounded-2xl rounded-bl-sm rounded-b-lg' : ''}
+                            ${!isFirst && !isLast ? 'rounded-lg rounded-l-sm' : ''}
+                            ${!isFirst && isLast ? 'rounded-2xl rounded-tl-sm rounded-t-lg rounded-bl-md' : ''}
+                          `}>
+                            {msg.preview}
+                          </div>
+                        )}
+
+                        {hasReactions && (
+                          <div className="flex gap-0.5 mt-1 ml-1">
+                            {Object.entries(msgReactions).map(([emoji, count]) => (
+                              <button
+                                key={emoji}
+                                onClick={() => handleReact(msgId, emoji)}
+                                className="flex items-center gap-0.5 bg-white border border-gray-200 rounded-full px-1.5 py-0.5 text-xs shadow-sm hover:bg-gray-50 transition-colors"
+                              >
+                                <span>{emoji}</span>
+                                {count > 1 && <span className="text-gray-500 text-[10px]">{count}</span>}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
                         {isLast && (
-                          <p className="text-[10px] text-gray-400 mt-1 mr-1">{formatTime(msg.timestamp)}</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5 ml-1">{formatTime(msg.timestamp)}</p>
                         )}
                       </div>
                     </div>
                   );
-                }
-
-                // ── Incoming (left-aligned) ────────────────
-                return (
-                  <div key={msg.id || idx} className={`flex items-end gap-2 ${isFirst ? 'mt-2' : 'mt-0.5'}`}>
-                    <div className="w-8 shrink-0 flex items-end">
-                      {isLast ? (
-                        <Avatar src={msg.sender.avatar} name={msg.sender.name} size="sm" />
-                      ) : (
-                        <div className="w-8" />
-                      )}
-                    </div>
-
-                    <div className="max-w-[72%] flex flex-col">
-                      {isFirst && (
-                        <p className="text-[11px] text-gray-400 font-medium mb-1 ml-1">{msg.sender.name}</p>
-                      )}
-                      {msg.subject && isFirst && (
-                        <p className="text-[11px] text-gray-500 font-medium mb-1 ml-1 italic">{msg.subject}</p>
-                      )}
-                      <div className={`
-                        px-3.5 py-2.5 text-sm text-gray-800 leading-relaxed shadow-sm
-                        ${isFirst && isLast ? 'rounded-2xl rounded-bl-sm' : ''}
-                        ${isFirst && !isLast ? 'rounded-2xl rounded-bl-sm rounded-b-lg' : ''}
-                        ${!isFirst && !isLast ? 'rounded-lg rounded-l-sm' : ''}
-                        ${!isFirst && isLast ? 'rounded-2xl rounded-tl-sm rounded-t-lg rounded-bl-sm' : ''}
-                        bg-white border border-gray-100
-                      `}>
-                        {msg.preview}
-                      </div>
-                      {isLast && (
-                        <p className="text-[10px] text-gray-400 mt-1 ml-1">{formatTime(msg.timestamp)}</p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                })}
+              </div>
             </div>
-          </div>
-        ))}
-        {/* Scroll anchor */}
-        <div ref={threadBottomRef} />
-      </div>
+          ))}
+          <div ref={threadBottomRef} />
+        </div>
 
-      {/* ── AI Reply Box (always shown) ───────────────────── */}
-      <div className="px-4 pt-3 pb-1 bg-white border-t border-gray-100">
-        <AIReplyBox
-          suggestedReply={aiDraft}
-          loading={draftLoading}
-          onSend={handleSendDraft}
-          onRegenerate={handleRegenerateDraft}
+        {/* Forward toast */}
+        {forwardToast && (
+          <div className="absolute bottom-28 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-3 py-2 rounded-xl shadow-lg z-50 pointer-events-none">
+            Forwarded: &ldquo;{forwardToast}&rdquo;
+          </div>
+        )}
+
+        {/* ── AI Reply Box ───────────────────────────────────── */}
+        <div className="px-4 pt-3 pb-1 bg-white border-t border-gray-100 shrink-0">
+          <AIReplyBox
+            suggestedReply={aiDraft}
+            loading={draftLoading}
+            onSend={handleSendDraft}
+            onRegenerate={handleRegenerateDraft}
+          />
+        </div>
+
+        {/* ── Compose bar ───────────────────────────────────── */}
+        <ReplyToolbar
+          recipientName={group.senderName}
+          channel={group.channel}
+          channelLabel={channelLabel}
+          onMessageSent={addLocalMessage}
         />
       </div>
 
-      {/* Manual reply input */}
-      <ReplyToolbar
-        recipientName={group.senderName}
-        channel={group.channel}
-        onMessageSent={addLocalMessage}
-      />
-    </>
+      {/* ── Slack Thread Panel ─────────────────────────────── */}
+      {selectedThread && group.channel === 'slack' && (
+        <ThreadPanel
+          parentMsg={selectedThread}
+          onClose={() => setSelectedThread(null)}
+        />
+      )}
+    </div>
   );
 }

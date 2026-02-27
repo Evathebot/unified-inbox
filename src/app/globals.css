@@ -19,6 +19,42 @@ body {
   min-height: 100vh;
 }
 
+/* ===== Dark Mode ===== */
+html.dark {
+  color-scheme: dark;
+}
+
+html.dark body {
+  background: #0f172a;
+  color: #f1f5f9;
+}
+
+/* Core surface overrides */
+html.dark .bg-white { background-color: #1e293b !important; }
+html.dark .bg-gray-50 { background-color: #0f172a !important; }
+html.dark .bg-gray-100 { background-color: #1e293b !important; }
+html.dark .bg-gray-200 { background-color: #334155 !important; }
+html.dark .\[\#f0f2f5\] { background-color: #0f172a !important; }
+
+/* Border overrides */
+html.dark .border-gray-100 { border-color: #1e293b !important; }
+html.dark .border-gray-200 { border-color: #334155 !important; }
+
+/* Text overrides */
+html.dark .text-gray-900 { color: #f1f5f9 !important; }
+html.dark .text-gray-800 { color: #e2e8f0 !important; }
+html.dark .text-gray-700 { color: #cbd5e1 !important; }
+html.dark .text-gray-600 { color: #94a3b8 !important; }
+html.dark .text-gray-500 { color: #64748b !important; }
+html.dark .text-gray-400 { color: #475569 !important; }
+
+/* Message bubbles in dark mode */
+html.dark .bg-\[\#0b5cff\] { background-color: #1d4ed8 !important; }
+
+/* Scrollbar in dark mode */
+html.dark ::-webkit-scrollbar-thumb { background: #334155; }
+html.dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
 /* Light scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
@@ -199,3 +235,40 @@ body {
 }
 .typing-dot:nth-child(2) { animation-delay: 0.2s; }
 .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* Voice recording waveform bars */
+@keyframes voice-bar {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
+
+.voice-bar {
+  transform-origin: bottom;
+  animation: voice-bar 0.8s ease-in-out infinite;
+}
+
+/* Recording dot blink */
+@keyframes recording-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+
+.recording-dot {
+  animation: recording-blink 1.2s ease-in-out infinite;
+}
+
+/* Reaction fade-in */
+@keyframes reaction-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  70% { transform: scale(1.15); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.reaction-pop {
+  animation: reaction-pop 0.2s ease-out forwards;
+}
+
+/* Message hover actions */
+.group\/msg:hover .hover-actions {
+  opacity: 1;
+}

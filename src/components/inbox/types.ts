@@ -13,6 +13,11 @@ export interface ConversationGroup {
   hasAIDraft: boolean;
   topicLabel?: string;
   topicColor?: string;
+  conversationId?: string;
+  isGroupConversation?: boolean;
+  memberAvatars?: string[];
+  memberNames?: string[];
+  _groupKey: string;
 }
 
 export type SortType = 'priority' | 'recent';

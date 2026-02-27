@@ -1,5 +1,5 @@
 import { Message, Contact } from '@prisma/client';
-import { generateJSON, generateCompletion } from './ollama';
+import { generateJSON, generateCompletion } from './claude';
 
 /**
  * Calculate priority score for a message (1-100) using LLM
@@ -79,7 +79,7 @@ function calculatePriorityScoreHeuristic(message: Message & { contact?: Contact 
 export async function generateDraftReply(
   message: Message,
   conversationMessages: Message[] = []
-): Promise<string> {
+): Promise<string | null> {
   const context = conversationMessages
     .map(m => `${m.senderId === message.senderId ? 'Them' : 'Me'}: ${m.body}`)
     .join('\n');
@@ -102,8 +102,8 @@ export async function generateDraftReply(
     });
     return draft.trim();
   } catch (error) {
-    console.error('LLM draft generation failed, falling back to template:', error);
-    return `Thank you for your message. I've received it and will get back to you soon.`;
+    console.error('Claude draft generation failed:', error);
+    return null;
   }
 }
 

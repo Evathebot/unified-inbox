@@ -1,9 +1,9 @@
 'use client';
 
-import { SlidersHorizontal, Plus, Sparkles, Archive } from 'lucide-react';
+import { SlidersHorizontal, Plus, Sparkles, Archive, CheckCheck } from 'lucide-react';
 import Avatar from '@/components/Avatar';
+import GroupAvatar from '@/components/GroupAvatar';
 import SearchBar from '@/components/SearchBar';
-import ChannelBadge from '@/components/ChannelBadge';
 import ChannelContextBadge from '@/components/ChannelContextBadge';
 import PriorityDot from '@/components/PriorityDot';
 import { getRelativeTime } from '@/lib/mockData';
@@ -15,6 +15,7 @@ interface ConversationListProps {
   selectedGroup: ConversationGroup | null;
   onSelect: (group: ConversationGroup) => void;
   onArchive: (group: ConversationGroup) => void;
+  onMarkAllRead: () => void;
   searchQuery: string;
   setSearchQuery: (v: string) => void;
   showFilterPanel: boolean;
@@ -31,16 +32,34 @@ interface ConversationListProps {
   unreadCount: number;
   activeCount: number;
   greeting: string;
+  userName: string;
   onCompose: () => void;
 }
 
+/**
+ * Scrollable list of conversation groups displayed in the left panel.
+ *
+ * Each row shows:
+ * - GroupAvatar (2×2 collage) or Avatar with a channel-platform badge
+ * - Sender name, numeric unread badge, and relative timestamp
+ * - Latest message preview with an optional topic-label chip
+ * - Channel context badge (workspace › channel) for Slack group convos
+ * - "AI draft ready" chip when an AI reply has been pre-generated
+ * - Archive button revealed on row hover
+ *
+ * Read rows are rendered at reduced opacity to create clear visual contrast
+ * with unread rows. Priority conversations get a coloured left-border accent.
+ *
+ * All state and handlers are owned by `useInboxState` and passed as props —
+ * this component is purely presentational.
+ */
 export default function ConversationList({
-  groups, selectedGroup, onSelect, onArchive,
+  groups, selectedGroup, onSelect, onArchive, onMarkAllRead,
   searchQuery, setSearchQuery,
   showFilterPanel, setShowFilterPanel, activeFiltersCount,
   filterUnread, setFilterUnread, filterUnanswered, setFilterUnanswered,
   sortBy, setSortBy, accountFilter, setAccountFilter,
-  unreadCount, activeCount, greeting, onCompose,
+  unreadCount, activeCount, greeting, userName, onCompose,
 }: ConversationListProps) {
   return (
     <div className="w-full md:w-96 lg:w-[380px] border-r border-gray-200 flex flex-col bg-white relative">
@@ -48,18 +67,40 @@ export default function ConversationList({
       <div className="px-4 pt-4 pb-3 border-b border-gray-100">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-base font-semibold text-gray-900">{greeting}, Alex.</h1>
+            <h1 className="text-base font-semibold text-gray-900">{greeting}, {userName.split(' ')[0]}.</h1>
             <p className="text-xs text-gray-400 mt-0.5">
-              {unreadCount} unread · {activeCount} total
+              {unreadCount > 0 ? (
+                <button
+                  onClick={onMarkAllRead}
+                  className="hover:text-gray-600 transition-colors underline underline-offset-2"
+                  title="Mark all as read"
+                >
+                  {unreadCount} unread
+                </button>
+              ) : (
+                <span>{unreadCount} unread</span>
+              )}
+              {' · '}{activeCount} total
             </p>
           </div>
-          <button
-            onClick={onCompose}
-            className="w-8 h-8 rounded-lg bg-gray-900 text-white flex items-center justify-center hover:bg-gray-800 transition-colors"
-            title="New message (c)"
-          >
-            <Plus size={16} />
-          </button>
+          <div className="flex items-center gap-1.5">
+            {unreadCount > 0 && (
+              <button
+                onClick={onMarkAllRead}
+                className="w-8 h-8 rounded-lg bg-gray-100 text-gray-500 flex items-center justify-center hover:bg-gray-200 transition-colors"
+                title="Mark all as read"
+              >
+                <CheckCheck size={15} />
+              </button>
+            )}
+            <button
+              onClick={onCompose}
+              className="w-8 h-8 rounded-lg bg-gray-900 text-white flex items-center justify-center hover:bg-gray-800 transition-colors"
+              title="New message (c)"
+            >
+              <Plus size={16} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -99,17 +140,27 @@ export default function ConversationList({
       <div className="flex-1 overflow-y-auto">
         {groups.map((group) => {
           const latest = group.messages[group.messages.length - 1];
+          const isUnread = group.unreadCount > 0;
           const isSelected =
             selectedGroup?.senderName === group.senderName &&
             selectedGroup?.channel === group.channel;
 
+          const isPriority = group.highestPriority >= 70;
+          const priorityBorderColor = group.highestPriority >= 80 ? 'border-l-red-500' : 'border-l-orange-400';
+
           return (
             <div
-              key={`${group.senderName}::${group.channel}`}
+              key={group._groupKey}
               onClick={() => onSelect(group)}
               className={`group relative px-4 py-2.5 cursor-pointer border-b border-gray-100 transition-all duration-100 ${
-                isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
-              }`}
+                isSelected
+                  ? 'bg-blue-50'
+                  : isPriority
+                  ? 'bg-orange-50/30 hover:bg-orange-50/60'
+                  : isUnread
+                  ? 'hover:bg-gray-50'
+                  : 'hover:bg-gray-50 opacity-75'
+              } ${isPriority ? `border-l-2 ${priorityBorderColor}` : ''}`}
             >
               {/* Selected left accent */}
               {isSelected && (
@@ -126,33 +177,57 @@ export default function ConversationList({
               </button>
 
               <div className="flex items-start gap-2.5 pr-6">
-                {/* Avatar with priority dot overlay */}
+                {/* Avatar with channel icon overlay */}
                 <div className="relative shrink-0 mt-0.5">
-                  <Avatar src={group.senderAvatar} name={group.senderName} size="md" online={group.senderOnline} />
-                  <div className="absolute -bottom-0.5 -right-0.5">
-                    <PriorityDot priority={group.highestPriority} size="sm" />
-                  </div>
+                  {group.isGroupConversation && group.memberAvatars && group.memberAvatars.length > 0 ? (
+                    <GroupAvatar
+                      memberAvatars={group.memberAvatars}
+                      memberNames={group.memberNames ?? [group.senderName]}
+                      size="md"
+                      channel={group.channel}
+                    />
+                  ) : (
+                    <Avatar
+                      src={group.senderAvatar}
+                      name={group.senderName}
+                      size="md"
+                      online={group.senderOnline}
+                      channel={group.channel}
+                    />
+                  )}
+                  {/* Priority dot — bottom-left of avatar */}
+                  {isPriority && (
+                    <div className="absolute -bottom-0.5 -left-0.5">
+                      <PriorityDot priority={group.highestPriority} size="sm" />
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex-1 min-w-0">
                   {/* Name row */}
                   <div className="flex items-center justify-between gap-1 mb-0.5">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <h3 className={`text-sm truncate ${group.unreadCount > 0 ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}>
+                      <h3 className={`text-sm truncate ${
+                        isUnread ? 'font-semibold text-gray-900' : 'font-normal text-gray-500'
+                      }`}>
                         {group.senderName}
                       </h3>
-                      <ChannelBadge channel={group.channel} size="sm" />
-                      {group.messages.length > 1 && (
-                        <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full font-medium shrink-0">
-                          {group.messages.length}
+                      {isPriority && (
+                        <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${group.highestPriority >= 80 ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600'}`}>
+                          Priority
                         </span>
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      {group.unreadCount > 0 && (
-                        <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                      {/* Numeric unread badge */}
+                      {isUnread && (
+                        <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">
+                          {group.unreadCount > 99 ? '99+' : group.unreadCount}
+                        </span>
                       )}
-                      <span className="text-[11px] text-gray-400">{getRelativeTime(group.latestTimestamp)}</span>
+                      <span className={`text-[11px] ${isUnread ? 'text-gray-500 font-medium' : 'text-gray-400'}`}>
+                        {getRelativeTime(group.latestTimestamp)}
+                      </span>
                     </div>
                   </div>
 
@@ -163,7 +238,12 @@ export default function ConversationList({
                         {group.topicLabel}
                       </span>
                     )}
-                    <p className="text-xs text-gray-500 line-clamp-1">{latest.subject || latest.preview}</p>
+                    <p className={`text-xs line-clamp-1 ${isUnread ? 'text-gray-600' : 'text-gray-400'}`}>
+                      {group.isGroupConversation
+                        ? <><span className={`font-medium ${isUnread ? 'text-gray-700' : 'text-gray-500'}`}>{latest.sender.name}:</span>{' '}{latest.subject || latest.preview}</>
+                        : (latest.subject || latest.preview)
+                      }
+                    </p>
                   </div>
 
                   {/* Channel context */}

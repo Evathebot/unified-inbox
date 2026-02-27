@@ -1,3 +1,10 @@
+/**
+ * POST /api/beeper/connect
+ *
+ * Initiates the OAuth-style Beeper workspace connection flow.
+ * Generates a state token, stores it in the DB, and returns the
+ * Beeper authorisation URL for the client to redirect to.
+ */
 import { NextResponse } from 'next/server';
 import { createHash, randomBytes } from 'crypto';
 import { prisma } from '@/lib/db';
