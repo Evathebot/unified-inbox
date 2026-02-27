@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Check, X, Bell, Zap, Moon, Sun, RefreshCw, Plug, ExternalLink, Loader2, LogOut } from 'lucide-react';
 import GlassCard from '@/components/GlassCard';
@@ -53,7 +53,7 @@ function timeAgo(iso: string): string {
 
 type BeeperStatus = 'idle' | 'connecting' | 'syncing' | 'synced' | 'sync-error' | 'connect-error';
 
-export default function SettingsPage() {
+function SettingsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -77,6 +77,17 @@ export default function SettingsPage() {
   const [priorityScore, setPriorityScore] = useState(60);
   const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
+
+  // Sync preferences from localStorage on mount
+  useEffect(() => {
+    setDarkMode(document.documentElement.classList.contains('dark'));
+    const savedAutoDraft = localStorage.getItem('pref-autoDraft');
+    const savedPriorityScore = localStorage.getItem('pref-priorityScore');
+    const savedNotifications = localStorage.getItem('pref-notifications');
+    if (savedAutoDraft !== null) setAutoDraft(savedAutoDraft === 'true');
+    if (savedPriorityScore !== null) setPriorityScore(Number(savedPriorityScore));
+    if (savedNotifications !== null) setNotifications(savedNotifications === 'true');
+  }, []);
 
   const loadChannelStatuses = useCallback(() => {
     fetch('/api/channels/status')
@@ -403,7 +414,11 @@ export default function SettingsPage() {
                 <p className="text-gray-900 font-semibold text-sm mb-0.5">Auto-draft Replies</p>
                 <p className="text-xs text-gray-500">Automatically generate AI-powered reply suggestions</p>
               </div>
-              <Toggle on={autoDraft} onChange={() => setAutoDraft(!autoDraft)} />
+              <Toggle on={autoDraft} onChange={() => {
+                const next = !autoDraft;
+                setAutoDraft(next);
+                localStorage.setItem('pref-autoDraft', String(next));
+              }} />
             </div>
             <div>
               <div className="flex items-center justify-between mb-3">
@@ -415,7 +430,11 @@ export default function SettingsPage() {
               </div>
               <input
                 type="range" min="0" max="100" value={priorityScore}
-                onChange={(e) => setPriorityScore(Number(e.target.value))}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setPriorityScore(val);
+                  localStorage.setItem('pref-priorityScore', String(val));
+                }}
                 className="w-full h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer
                   [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4
                   [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-900
@@ -437,7 +456,11 @@ export default function SettingsPage() {
                 <p className="text-gray-900 font-semibold text-sm mb-0.5">Push Notifications</p>
                 <p className="text-xs text-gray-500">Receive notifications for new messages</p>
               </div>
-              <Toggle on={notifications} onChange={() => setNotifications(!notifications)} />
+              <Toggle on={notifications} onChange={() => {
+                const next = !notifications;
+                setNotifications(next);
+                localStorage.setItem('pref-notifications', String(next));
+              }} />
             </div>
             <div className="pl-4 space-y-3 text-sm">
               <label className="flex items-center gap-3 text-gray-600 cursor-pointer">
@@ -467,10 +490,23 @@ export default function SettingsPage() {
               <p className="text-gray-900 font-semibold text-sm mb-0.5">Dark Mode</p>
               <p className="text-xs text-gray-500">Use dark theme for reduced eye strain</p>
             </div>
-            <Toggle on={darkMode} onChange={() => setDarkMode(!darkMode)} />
+            <Toggle on={darkMode} onChange={() => {
+              const next = !darkMode;
+              setDarkMode(next);
+              document.documentElement.classList.toggle('dark', next);
+              localStorage.setItem('theme', next ? 'dark' : 'light');
+            }} />
           </div>
         </GlassCard>
       </div>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen p-6 flex items-center justify-center text-gray-400">Loading…</div>}>
+      <SettingsContent />
+    </Suspense>
   );
 }

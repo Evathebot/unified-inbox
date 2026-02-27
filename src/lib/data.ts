@@ -20,7 +20,7 @@ import { extractActionItems } from './ai';
  * Transform database message to frontend Message type
  */
 // Infer topic from subject/body keywords
-function inferTopic(subject: string, body: string): string | undefined {
+export function inferTopic(subject: string, body: string): string | undefined {
   const text = `${subject} ${body}`.toLowerCase();
   const rules: [string[], string][] = [
     [['budget', 'invoice', 'payment', 'facture', 'financial', 'paiement'], 'Finance'],
@@ -60,7 +60,7 @@ const topicColors: Record<string, string> = {
   investor: 'bg-indigo-100 text-indigo-700',
 };
 
-function getTopicColor(topic: string): string {
+export function getTopicColor(topic: string): string {
   const lower = topic.toLowerCase();
   for (const [key, color] of Object.entries(topicColors)) {
     if (lower.includes(key)) return color;
@@ -73,7 +73,7 @@ function getTopicColor(topic: string): string {
  * - Phone numbers like "14508214175" → "+1 (450) 821-4175"
  * - Beeper matrix IDs like "@slackgo_xxx:beeper.local" → stripped readable form
  */
-function formatContactName(name: string): string {
+export function formatContactName(name: string): string {
   if (!name) return 'Unknown';
 
   // Beeper Matrix IDs: @xxx:beeper.local
@@ -107,7 +107,7 @@ function formatContactName(name: string): string {
   return name;
 }
 
-function transformMessage(dbMessage: any): Message {
+function transformMessage(dbMessage: any, conv?: { id: string; title: string; type: string }): Message {
   // Extract topic from AIMetadata
   let topicLabel: string | undefined;
   let topicColor: string | undefined;
@@ -191,6 +191,9 @@ function transformMessage(dbMessage: any): Message {
         ],
       },
     aiDraft: dbMessage.aiDraft || dbMessage.aiMetadata?.draftReply || undefined,
+    conversationId: conv?.id ?? dbMessage.conversationId,
+    conversationTitle: conv?.title,
+    isGroupConversation: (conv?.type ?? dbMessage.conversation?.type) === 'group',
   };
 }
 
@@ -242,7 +245,7 @@ function transformContact(dbContact: any): Contact {
     role: meta.role || meta.title || 'Contact',
     location: meta.location || '',
     avatar: dbContact.avatar || '👤',
-    avatarUrl: dbContact.avatar?.startsWith('http') ? dbContact.avatar : undefined,
+    avatarUrl: (dbContact.avatar?.startsWith('http') || dbContact.avatar?.startsWith('mxc://')) ? dbContact.avatar : undefined,
     channels,
     allPlatforms: channels,
     relationshipScore: dbContact.relationshipScore,
@@ -321,7 +324,9 @@ export async function getMessages(filters?: {
     if (conversations.length === 0) throw new Error('no conversations in db');
 
     // Flatten: each conversation's messages → Message[], most-recent-first across all convos
-    const allMessages = conversations.flatMap(conv => conv.messages.map(transformMessage));
+    const allMessages = conversations.flatMap(conv =>
+      conv.messages.map(msg => transformMessage(msg, { id: conv.id, title: conv.title, type: conv.type }))
+    );
 
     return allMessages;
   } catch (error) {
@@ -430,7 +435,7 @@ export async function getConversation(contactId: string): Promise<Message[]> {
       orderBy: { timestamp: 'asc' },
     });
 
-    return messages.map(transformMessage);
+    return messages.map((m) => transformMessage(m));
   } catch (error) {
     console.error('Error fetching conversation from database:', error);
     return mockMessages.filter((m) => m.sender.name === contactId);
@@ -532,14 +537,14 @@ export async function getBriefing(): Promise<BriefingData> {
         month: 'long',
         day: 'numeric',
       }),
-      priorityMessages: priorityMessages.map(transformMessage),
-      overdueReplies: overdueMessages.map(transformMessage),
+      priorityMessages: priorityMessages.map((m) => transformMessage(m)),
+      overdueReplies: overdueMessages.map((m) => transformMessage(m)),
       calendarEvents: todayEvents.map(transformCalendarEvent),
       actionItems: allActionItems.slice(0, 10),
       stats: {
-        messagesYesterday: totalToday,
-        responseRate: 87,
-        avgResponseTime: '2.3 hours',
+        messagesToday: totalToday,
+        unreadCount,
+        overdueCount: overdueMessages.length,
       },
     };
   } catch (error) {

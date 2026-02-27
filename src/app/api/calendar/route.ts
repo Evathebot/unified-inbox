@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { requireWorkspace } from '@/lib/auth';
 
 /**
  * GET /api/calendar
@@ -8,16 +9,17 @@ import { prisma } from '@/lib/db';
  */
 export async function GET(request: NextRequest) {
   try {
+    const workspace = await requireWorkspace();
     const searchParams = request.nextUrl.searchParams;
-    
+
     const fromStr = searchParams.get('from');
     const toStr = searchParams.get('to');
-    
+
     const page = parseInt(searchParams.get('page') || '1');
     const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
     const skip = (page - 1) * limit;
-    
-    const where: Record<string, unknown> = {};
+
+    const where: Record<string, unknown> = { workspaceId: workspace.id };
     
     // Default to upcoming events
     const fromDate = fromStr ? new Date(fromStr) : new Date();
@@ -67,6 +69,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    const workspace = await requireWorkspace();
     const body = await request.json();
     const { title, startTime, endTime, contactId, location, attendees } = body;
 
@@ -79,6 +82,7 @@ export async function POST(request: NextRequest) {
 
     const event = await prisma.calendarEvent.create({
       data: {
+        workspaceId: workspace.id,
         title,
         startTime: new Date(startTime),
         endTime: new Date(endTime),

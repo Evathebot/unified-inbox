@@ -1,10 +1,27 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Message, Channel } from '@/lib/mockData';
 import { ConversationGroup, SortType, AccountFilter } from '@/components/inbox/types';
 
+const STORAGE_KEY = 'unified-inbox-read';
+
+/**
+ * Core inbox state management hook.
+ *
+ * Handles everything the inbox UI needs: grouping messages into conversations,
+ * filtering/sorting those groups, persisting read state to localStorage so it
+ * survives page refreshes, archiving, and the compose flow.
+ *
+ * Broadcasting: dispatches a `'inbox-unread-changed'` CustomEvent on `window`
+ * whenever the unread count changes, which SidebarClient listens to in order
+ * to keep the nav badge in sync without a round-trip to the server.
+ *
+ * @param initialMessages - Flat array of messages fetched by the server component.
+ * @returns All state values, computed properties, and action handlers
+ *          needed by ConversationList and ConversationDetail.
+ */
 export function useInboxState(initialMessages: Message[]) {
   const searchParams = useSearchParams();
   const channelFilter = searchParams.get('channel');
@@ -28,10 +45,36 @@ export function useInboxState(initialMessages: Message[]) {
   const [sortBy, setSortBy] = useState<SortType>('priority');
   const [accountFilter, setAccountFilter] = useState<AccountFilter>('all');
 
+  // Load read messages from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) setReadMessages(new Set(JSON.parse(stored) as string[]));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Persist read messages to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([...readMessages]));
+    } catch {
+      // ignore
+    }
+  }, [readMessages]);
+
   const isMessageRead = (msg: Message) => !msg.unread || readMessages.has(msg.id);
 
   const unreadCount = initialMessages.filter((m) => !isMessageRead(m)).length;
   const activeCount = initialMessages.length;
+
+  // Broadcast unread count to sidebar whenever it changes
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent('inbox-unread-changed', { detail: { count: unreadCount } })
+    );
+  }, [unreadCount]);
 
   const conversationGroups = useMemo(() => {
     const filtered = initialMessages.filter((message) => {
@@ -53,7 +96,10 @@ export function useInboxState(initialMessages: Message[]) {
 
     const groupMap = new Map<string, ConversationGroup>();
     for (const msg of filtered) {
-      const key = `${msg.sender.name}::${msg.channel}`;
+      // Group by conversationId when available, otherwise fall back to sender+channel
+      const key = msg.conversationId
+        ? `conv::${msg.conversationId}`
+        : `${msg.sender.name}::${msg.channel}`;
       const existing = groupMap.get(key);
       if (existing) {
         existing.messages.push(msg);
@@ -65,11 +111,19 @@ export function useInboxState(initialMessages: Message[]) {
           existing.topicLabel = msg.topicLabel;
           existing.topicColor = msg.topicColor;
         }
+        // Collect unique member avatars for group conversations
+        if (existing.isGroupConversation && existing.memberNames) {
+          if (!existing.memberNames.includes(msg.sender.name)) {
+            existing.memberNames.push(msg.sender.name);
+            existing.memberAvatars!.push(msg.sender.avatar);
+          }
+        }
       } else {
+        const isGroup = msg.isGroupConversation ?? false;
         groupMap.set(key, {
-          senderName: msg.sender.name,
-          senderAvatar: msg.sender.avatar,
-          senderOnline: msg.sender.online,
+          senderName: isGroup ? (msg.conversationTitle || msg.sender.name) : msg.sender.name,
+          senderAvatar: isGroup ? '' : msg.sender.avatar,
+          senderOnline: isGroup ? false : msg.sender.online,
           channel: msg.channel,
           channelContext: msg.channelContext,
           messages: [msg],
@@ -79,12 +133,17 @@ export function useInboxState(initialMessages: Message[]) {
           hasAIDraft: msg.hasAIDraft,
           topicLabel: msg.topicLabel,
           topicColor: msg.topicColor,
+          conversationId: msg.conversationId,
+          isGroupConversation: isGroup,
+          memberAvatars: isGroup ? [msg.sender.avatar] : undefined,
+          memberNames: isGroup ? [msg.sender.name] : undefined,
+          _groupKey: key,
         });
       }
     }
 
     const groups = Array.from(groupMap.values())
-      .filter(g => !archivedGroups.has(`${g.senderName}::${g.channel}`));
+      .filter(g => !archivedGroups.has(g._groupKey));
 
     groups.forEach(g => g.messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()));
 
@@ -109,14 +168,21 @@ export function useInboxState(initialMessages: Message[]) {
   };
 
   const handleArchive = (group: ConversationGroup) => {
-    const key = `${group.senderName}::${group.channel}`;
-    setArchivedGroups(prev => new Set([...prev, key]));
+    setArchivedGroups(prev => new Set([...prev, group._groupKey]));
     if (
       selectedGroup?.senderName === group.senderName &&
       selectedGroup?.channel === group.channel
     ) {
       setSelectedGroup(null);
     }
+  };
+
+  const handleMarkAllRead = () => {
+    const newRead = new Set(readMessages);
+    initialMessages.forEach(m => newRead.add(m.id));
+    setReadMessages(newRead);
+    // Fire-and-forget API call to persist in DB
+    fetch('/api/conversations/read-all', { method: 'POST' }).catch(() => {});
   };
 
   const getGreeting = () => {
@@ -177,6 +243,8 @@ export function useInboxState(initialMessages: Message[]) {
     getGreeting,
     // Actions
     handleSelectGroup,
+    handleDeselect: () => setSelectedGroup(null),
     handleArchive,
+    handleMarkAllRead,
   };
 }

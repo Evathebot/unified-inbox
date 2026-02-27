@@ -3,10 +3,11 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import PlatformLogo from './PlatformLogo';
-import { Users, Calendar, Settings } from 'lucide-react';
+import { Users, Calendar, Settings, Newspaper } from 'lucide-react';
 
 const navItems = [
   { icon: 'inbox', href: '/', label: 'Inbox', isLucide: false },
+  { icon: 'newspaper', href: '/briefing', label: 'Briefing', isLucide: true, LucideIcon: Newspaper },
   { icon: 'calendar', href: '/calendar', label: 'Calendar', isLucide: true, LucideIcon: Calendar },
   { icon: 'users', href: '/contacts', label: 'Contacts', isLucide: true, LucideIcon: Users },
   { icon: 'settings', href: '/settings', label: 'Settings', isLucide: true, LucideIcon: Settings },

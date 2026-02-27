@@ -1,8 +1,9 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Users, Settings, Calendar } from 'lucide-react';
+import { Users, Settings, Calendar, Newspaper } from 'lucide-react';
 import PlatformLogo from './PlatformLogo';
 
 const platformIcons = [
@@ -20,13 +21,37 @@ export default function SidebarClient({ badgeCounts }: { badgeCounts: Record<str
   const searchParams = useSearchParams();
   const channelParam = searchParams.get('channel');
 
-  const totalUnread = Object.values(badgeCounts).reduce((a, b) => a + b, 0);
+  const serverTotal = Object.values(badgeCounts).reduce((a, b) => a + b, 0);
+  const [dynamicTotal, setDynamicTotal] = useState<number | null>(null);
+  const [userInitial, setUserInitial] = useState('?');
+
+  // Fetch current user for avatar
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(r => r.json())
+      .then(d => { if (d.name) setUserInitial(d.name.charAt(0).toUpperCase()); })
+      .catch(() => {});
+  }, []);
+
+  // Listen for unread count updates broadcast from the inbox
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const count = (e as CustomEvent<{ count: number }>).detail.count;
+      setDynamicTotal(count);
+    };
+    window.addEventListener('inbox-unread-changed', handler);
+    return () => window.removeEventListener('inbox-unread-changed', handler);
+  }, []);
+
+  const totalUnread = dynamicTotal ?? serverTotal;
 
   return (
     <div className="h-screen w-16 bg-white border-r border-gray-200 flex flex-col items-center py-4">
       {/* Platform logos */}
       <div className="flex flex-col items-center gap-2 flex-1">
-        {platformIcons.map((item) => {
+        {platformIcons.filter(item =>
+          item.platform === 'inbox' || (badgeCounts[item.platform] ?? 0) > 0
+        ).map((item) => {
           const isActive =
             item.platform === 'inbox'
               ? pathname === '/' && !channelParam
@@ -62,7 +87,7 @@ export default function SidebarClient({ badgeCounts }: { badgeCounts: Record<str
       <div className="flex flex-col items-center gap-1 pb-2">
         <Link href="/briefing" title="Briefing">
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 ${pathname === '/briefing' ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'}`}>
-            <PlatformLogo platform="inbox" size={18} />
+            <Newspaper size={18} />
           </div>
         </Link>
         <Link href="/calendar" title="Calendar">
@@ -83,11 +108,11 @@ export default function SidebarClient({ badgeCounts }: { badgeCounts: Record<str
       </div>
 
       {/* User avatar */}
-      <div className="mt-2">
-        <div className="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold text-sm">
-          A
+      <Link href="/settings" title="Settings">
+        <div className="mt-2 w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold text-sm hover:ring-2 hover:ring-orange-300 transition-all">
+          {userInitial}
         </div>
-      </div>
+      </Link>
     </div>
   );
 }

@@ -6,6 +6,10 @@ node_modules
 out
 
 # Database
+dev.db
+dev.db-journal
+dev.db-shm
+dev.db-wal
 prisma/dev.db
 prisma/dev.db-journal
 prisma/dev.db-shm

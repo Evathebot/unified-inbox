@@ -34,6 +34,10 @@ export interface Message {
     }[];
   };
   aiDraft?: string;
+  // Conversation grouping
+  conversationId?: string;
+  conversationTitle?: string;
+  isGroupConversation?: boolean;
 }
 
 export interface Contact {
@@ -75,9 +79,9 @@ export interface BriefingData {
   calendarEvents: CalendarEvent[];
   actionItems: string[];
   stats: {
-    messagesYesterday: number;
-    responseRate: number;
-    avgResponseTime: string;
+    messagesToday: number;
+    unreadCount?: number;
+    overdueCount?: number;
   };
 }
 
@@ -452,9 +456,9 @@ export const mockBriefing: BriefingData = {
     'Update investor deck slides 8-10 (Nina Patel)'
   ],
   stats: {
-    messagesYesterday: 23,
-    responseRate: 87,
-    avgResponseTime: '2.3 hours'
+    messagesToday: 23,
+    unreadCount: 12,
+    overdueCount: 4,
   }
 };
 
