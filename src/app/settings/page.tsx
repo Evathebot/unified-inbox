@@ -1,0 +1,445 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { Check, X, Bell, Zap, Moon, Sun, RefreshCw, Plug, ExternalLink, Loader2 } from 'lucide-react';
+import GlassCard from '@/components/GlassCard';
+import PlatformLogo from '@/components/PlatformLogo';
+
+// All channels Beeper Desktop can bridge, in display order.
+const ALL_CHANNELS: { id: string; name: string; platform: string }[] = [
+  { id: 'whatsapp',   name: 'WhatsApp',          platform: 'whatsapp' },
+  { id: 'telegram',   name: 'Telegram',           platform: 'telegram' },
+  { id: 'signal',     name: 'Signal',             platform: 'signal' },
+  { id: 'slack',      name: 'Slack',              platform: 'slack' },
+  { id: 'instagram',  name: 'Instagram',          platform: 'instagram' },
+  { id: 'messenger',  name: 'Messenger',          platform: 'messenger' },
+  { id: 'linkedin',   name: 'LinkedIn',           platform: 'linkedin' },
+  { id: 'discord',    name: 'Discord',            platform: 'discord' },
+  { id: 'imessage',   name: 'iMessage',           platform: 'imessage' },
+  { id: 'gmail',      name: 'Gmail',              platform: 'gmail' },
+  { id: 'googlechat', name: 'Google Chat',        platform: 'googlechat' },
+];
+
+interface ChannelStatus {
+  id: string;
+  name: string;
+  platform: string;
+  connected: boolean;
+  messageCount?: number;
+  lastMessage?: string | null;
+}
+
+function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
+  return (
+    <button
+      onClick={onChange}
+      className={`w-12 h-7 rounded-full transition-all duration-200 ${on ? 'bg-gray-900' : 'bg-gray-300'}`}
+    >
+      <div className={`w-5 h-5 bg-white rounded-full transition-all duration-200 transform ${on ? 'translate-x-6' : 'translate-x-1'}`} />
+    </button>
+  );
+}
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+type BeeperStatus = 'idle' | 'connecting' | 'syncing' | 'synced' | 'sync-error' | 'connect-error';
+
+export default function SettingsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // ── Beeper config ──────────────────────────────────────────
+  const [beeperConnected, setBeeperConnected] = useState(false);
+  const [beeperLastSync, setBeeperLastSync] = useState<string | null>(null);
+  const [beeperStatus, setBeeperStatus] = useState<BeeperStatus>('idle');
+  const [beeperError, setBeeperError] = useState('');
+  const [syncStats, setSyncStats] = useState<{ conversations?: number; messages?: number; contacts?: number }>({});
+
+  // ── Channel statuses (from DB) ─────────────────────────────
+  const [channels, setChannels] = useState<ChannelStatus[]>(
+    ALL_CHANNELS.map(c => ({ ...c, connected: false }))
+  );
+
+  // ── Preferences ────────────────────────────────────────────
+  const [autoDraft, setAutoDraft] = useState(true);
+  const [priorityScore, setPriorityScore] = useState(60);
+  const [notifications, setNotifications] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
+
+  const loadChannelStatuses = useCallback(() => {
+    fetch('/api/channels/status')
+      .then(r => r.json())
+      .then(data => {
+        const dbChannels: Record<string, { count: number; lastMessage: string | null }> =
+          data.channels ?? {};
+        setChannels(
+          ALL_CHANNELS.map(c => ({
+            ...c,
+            connected: (dbChannels[c.id]?.count ?? 0) > 0,
+            messageCount: dbChannels[c.id]?.count,
+            lastMessage: dbChannels[c.id]?.lastMessage ?? null,
+          }))
+        );
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    // Handle OAuth redirect result
+    const connected = searchParams.get('connected');
+    const beeperError = searchParams.get('beeper_error');
+    if (connected === 'true') {
+      setBeeperConnected(true);
+      // Strip query params from URL without triggering a reload
+      router.replace('/settings', { scroll: false });
+    } else if (beeperError) {
+      const msgs: Record<string, string> = {
+        authorization_denied: 'You denied authorization in Beeper Desktop.',
+        token_exchange_failed: 'Token exchange failed — try reconnecting.',
+        no_code: 'No authorization code received.',
+        invalid_state: 'Security check failed — please try again.',
+        no_code_verifier: 'PKCE verifier missing — please try connecting again.',
+        server_error: 'Server error — check that Beeper Desktop is running.',
+      };
+      setBeeperError(msgs[beeperError] || `Connection error: ${beeperError}`);
+      setBeeperStatus('connect-error');
+      router.replace('/settings', { scroll: false });
+    }
+
+    // Load Beeper connection info
+    fetch('/api/beeper/configure')
+      .then(r => r.json())
+      .then(data => {
+        setBeeperConnected(data.connected ?? false);
+        if (data.lastSyncAt) setBeeperLastSync(data.lastSyncAt);
+      })
+      .catch(() => {});
+
+    // Load sync stats
+    fetch('/api/sync')
+      .then(r => r.json())
+      .then(data => { if (data.stats) setSyncStats(data.stats); })
+      .catch(() => {});
+
+    loadChannelStatuses();
+  }, [searchParams, router, loadChannelStatuses]);
+
+  const handleConnectBeeper = async () => {
+    setBeeperStatus('connecting');
+    setBeeperError('');
+    try {
+      const res = await fetch('/api/beeper/connect');
+      const data = await res.json();
+      if (data.authUrl) {
+        // Redirect browser to Beeper Desktop's OAuth consent page
+        window.location.href = data.authUrl;
+      } else {
+        setBeeperError(data.error || 'Could not reach Beeper Desktop. Is it running?');
+        setBeeperStatus('connect-error');
+      }
+    } catch {
+      setBeeperError('Could not reach Beeper Desktop. Make sure it is running.');
+      setBeeperStatus('connect-error');
+    }
+  };
+
+  const handleSyncNow = async () => {
+    setBeeperStatus('syncing');
+    setBeeperError('');
+    try {
+      const res = await fetch('/api/sync', { method: 'POST' });
+      const data = await res.json();
+      if (res.status === 401) {
+        // Token expired — nudge towards reconnect
+        setBeeperError(data.error || 'Token expired — click Reconnect to re-authorize.');
+        setBeeperStatus('connect-error');
+        return;
+      }
+      if (data.success) {
+        setBeeperLastSync(new Date().toISOString());
+        if (data.result) setSyncStats({ conversations: data.result.conversations, messages: data.result.messages, contacts: data.result.contacts });
+        setBeeperStatus('synced');
+        setTimeout(() => setBeeperStatus('idle'), 3000);
+        loadChannelStatuses();
+      } else {
+        setBeeperError(data.error || 'Sync failed');
+        setBeeperStatus('sync-error');
+        setTimeout(() => setBeeperStatus('idle'), 4000);
+      }
+    } catch {
+      setBeeperError('Sync failed. Is Beeper Desktop running?');
+      setBeeperStatus('sync-error');
+      setTimeout(() => setBeeperStatus('idle'), 4000);
+    }
+  };
+
+  const isBusy = beeperStatus === 'connecting' || beeperStatus === 'syncing';
+  const isError = beeperStatus === 'connect-error' || beeperStatus === 'sync-error';
+
+  const syncLabel = beeperStatus === 'syncing' ? 'Syncing…'
+    : beeperStatus === 'synced' ? '✓ Synced'
+    : 'Sync Now';
+
+  const connectedChannels = channels.filter(c => c.connected);
+  const disconnectedChannels = channels.filter(c => !c.connected);
+
+  return (
+    <div className="min-h-screen p-6">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Settings</h1>
+          <p className="text-gray-500">Manage your integrations and preferences</p>
+        </div>
+
+        {/* ── Beeper Connection ──────────────────────────────── */}
+        <GlassCard className="p-6 mb-6">
+          <div className="flex items-start justify-between mb-5">
+            <div className="flex items-center gap-3">
+              <Plug size={20} className="text-purple-500 shrink-0 mt-0.5" />
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Beeper Desktop</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Local relay that bridges WhatsApp, Telegram, Slack, and more
+                </p>
+              </div>
+            </div>
+            <div className={`flex items-center gap-1.5 text-xs font-medium shrink-0 ${beeperConnected ? 'text-green-600' : 'text-gray-400'}`}>
+              {beeperConnected ? <Check size={13} /> : <X size={13} />}
+              <span>{beeperConnected ? 'Connected' : 'Not connected'}</span>
+            </div>
+          </div>
+
+          {/* Sync stats — only when data exists */}
+          {(syncStats.conversations || syncStats.messages) ? (
+            <div className="flex gap-4 mb-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
+              {[
+                { label: 'Conversations', value: syncStats.conversations ?? 0 },
+                { label: 'Messages', value: syncStats.messages ?? 0 },
+                { label: 'Contacts', value: syncStats.contacts ?? 0 },
+              ].map(({ label, value }) => (
+                <div key={label} className="flex-1 text-center">
+                  <p className="text-lg font-bold text-gray-900">{value.toLocaleString()}</p>
+                  <p className="text-[11px] text-gray-500">{label}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {beeperConnected ? (
+            /* ── Connected state ── */
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                onClick={handleSyncNow}
+                disabled={isBusy}
+                className="flex items-center gap-1.5 px-4 py-2 bg-blue-50 text-blue-700 text-sm rounded-lg font-medium hover:bg-blue-100 transition-all disabled:opacity-60"
+              >
+                <RefreshCw size={13} className={beeperStatus === 'syncing' ? 'animate-spin' : ''} />
+                {syncLabel}
+              </button>
+              <button
+                onClick={handleConnectBeeper}
+                disabled={isBusy}
+                className="px-4 py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-60"
+              >
+                Reconnect
+              </button>
+              {beeperLastSync && (
+                <span className="text-xs text-gray-400 ml-auto">
+                  Last sync: {new Date(beeperLastSync).toLocaleTimeString()}
+                </span>
+              )}
+            </div>
+          ) : (
+            /* ── Not connected state ── */
+            <div>
+              <p className="text-sm text-gray-500 mb-4 leading-relaxed">
+                Beeper Desktop is running on your Mac and bridges WhatsApp, iMessage, Slack, Telegram, and more into one API.
+                Click below to authorize this app — Beeper will show a quick consent dialog.
+              </p>
+              <button
+                onClick={handleConnectBeeper}
+                disabled={isBusy}
+                className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white text-sm rounded-xl font-medium hover:bg-gray-800 transition-all disabled:opacity-60"
+              >
+                {beeperStatus === 'connecting' ? (
+                  <Loader2 size={15} className="animate-spin" />
+                ) : (
+                  <ExternalLink size={15} />
+                )}
+                {beeperStatus === 'connecting' ? 'Opening Beeper…' : 'Connect Beeper Desktop'}
+              </button>
+            </div>
+          )}
+
+          {isError && beeperError && (
+            <p className="mt-3 text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{beeperError}</p>
+          )}
+        </GlassCard>
+
+        {/* ── Channel Connections ────────────────────────────── */}
+        <GlassCard className="p-6 mb-6">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-xl font-bold text-gray-900">Channel Connections</h2>
+            <span className="text-xs text-gray-400 bg-gray-50 border border-gray-100 rounded-full px-3 py-1">
+              {connectedChannels.length} of {channels.length} connected
+            </span>
+          </div>
+
+          {/* Connected channels */}
+          {connectedChannels.length > 0 && (
+            <div className="space-y-2 mb-4">
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-1 mb-2">Active</p>
+              {connectedChannels.map(ch => (
+                <div
+                  key={ch.id}
+                  className="flex items-center justify-between p-3.5 rounded-xl bg-green-50 border border-green-100"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                      <PlatformLogo platform={ch.platform} size={20} />
+                    </div>
+                    <div>
+                      <p className="text-gray-900 font-semibold text-sm">{ch.name}</p>
+                      <p className="text-xs text-gray-500">
+                        {ch.messageCount?.toLocaleString()} messages
+                        {ch.lastMessage ? ` · last ${timeAgo(ch.lastMessage)}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-green-600 text-xs font-medium">
+                    <Check size={13} />
+                    <span>Connected</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Disconnected channels */}
+          {disconnectedChannels.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-1 mb-2">
+                {connectedChannels.length > 0 ? 'Available via Beeper' : 'All channels — sync Beeper to connect'}
+              </p>
+              {disconnectedChannels.map(ch => (
+                <div
+                  key={ch.id}
+                  className="flex items-center justify-between p-3.5 rounded-xl bg-gray-50 border border-gray-100"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center shadow-sm opacity-50">
+                      <PlatformLogo platform={ch.platform} size={20} />
+                    </div>
+                    <div>
+                      <p className="text-gray-500 font-semibold text-sm">{ch.name}</p>
+                      <p className="text-xs text-gray-400">No data synced yet</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-gray-400 text-xs">
+                    <X size={13} />
+                    <span>Not connected</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p className="mt-4 text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
+            Channel connections are managed through <span className="font-medium text-gray-600">Beeper Desktop</span>.
+            Sync Beeper above to pull in messages from any connected channel.
+          </p>
+        </GlassCard>
+
+        {/* ── AI Preferences ─────────────────────────────────── */}
+        <GlassCard className="p-6 mb-6">
+          <div className="flex items-center gap-3 mb-6">
+            <Zap className="text-orange-500" size={22} />
+            <h2 className="text-xl font-bold text-gray-900">AI Preferences</h2>
+          </div>
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-900 font-semibold text-sm mb-0.5">Auto-draft Replies</p>
+                <p className="text-xs text-gray-500">Automatically generate AI-powered reply suggestions</p>
+              </div>
+              <Toggle on={autoDraft} onChange={() => setAutoDraft(!autoDraft)} />
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-gray-900 font-semibold text-sm mb-0.5">Priority Scoring Sensitivity</p>
+                  <p className="text-xs text-gray-500">Minimum score to mark messages as high priority</p>
+                </div>
+                <span className="text-gray-900 font-bold text-sm">{priorityScore}</span>
+              </div>
+              <input
+                type="range" min="0" max="100" value={priorityScore}
+                onChange={(e) => setPriorityScore(Number(e.target.value))}
+                className="w-full h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer
+                  [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4
+                  [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-900
+                  [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer"
+              />
+            </div>
+          </div>
+        </GlassCard>
+
+        {/* ── Notifications ──────────────────────────────────── */}
+        <GlassCard className="p-6 mb-6">
+          <div className="flex items-center gap-3 mb-6">
+            <Bell className="text-blue-500" size={22} />
+            <h2 className="text-xl font-bold text-gray-900">Notifications</h2>
+          </div>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-900 font-semibold text-sm mb-0.5">Push Notifications</p>
+                <p className="text-xs text-gray-500">Receive notifications for new messages</p>
+              </div>
+              <Toggle on={notifications} onChange={() => setNotifications(!notifications)} />
+            </div>
+            <div className="pl-4 space-y-3 text-sm">
+              <label className="flex items-center gap-3 text-gray-600 cursor-pointer">
+                <input type="checkbox" defaultChecked className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500" />
+                <span>High priority messages</span>
+              </label>
+              <label className="flex items-center gap-3 text-gray-600 cursor-pointer">
+                <input type="checkbox" defaultChecked className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500" />
+                <span>Mentions and replies</span>
+              </label>
+              <label className="flex items-center gap-3 text-gray-600 cursor-pointer">
+                <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500" />
+                <span>All new messages</span>
+              </label>
+            </div>
+          </div>
+        </GlassCard>
+
+        {/* ── Appearance ─────────────────────────────────────── */}
+        <GlassCard className="p-6">
+          <div className="flex items-center gap-3 mb-6">
+            {darkMode ? <Moon className="text-gray-600" size={22} /> : <Sun className="text-orange-400" size={22} />}
+            <h2 className="text-xl font-bold text-gray-900">Appearance</h2>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-900 font-semibold text-sm mb-0.5">Dark Mode</p>
+              <p className="text-xs text-gray-500">Use dark theme for reduced eye strain</p>
+            </div>
+            <Toggle on={darkMode} onChange={() => setDarkMode(!darkMode)} />
+          </div>
+        </GlassCard>
+      </div>
+    </div>
+  );
+}

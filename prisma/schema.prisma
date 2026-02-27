@@ -1,0 +1,314 @@
+// Unified AI Inbox — Multi-Tenant Schema
+// Architecture: User → Workspace → Connections/Contacts/Messages
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ============================================================
+// MULTI-TENANT CORE
+// ============================================================
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  name          String
+  avatar        String?
+  passwordHash  String?   // null for OAuth-only users
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  workspace     Workspace?
+  sessions      Session[]
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+model Workspace {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  name      String
+  settings  String?  // JSON — AI prefs, notification prefs, etc.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connections   Connection[]
+  contacts      Contact[]
+  conversations Conversation[]
+  messages      Message[]
+  calendarEvents CalendarEvent[]
+}
+
+// ============================================================
+// PLATFORM CONNECTIONS (Beeper, Gmail, etc.)
+// ============================================================
+
+model Connection {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  platform      String   // "beeper", "gmail", "google_calendar"
+  accountId     String?  // Beeper accountID or Gmail email
+  network       String?  // "WhatsApp", "Slack", "Telegram" (from Beeper)
+  displayName   String?
+  accessToken   String?  // encrypted in production
+  refreshToken  String?
+  apiUrl        String?  // e.g. "http://localhost:23373"
+  status        String   @default("active") // active, disconnected, error
+  lastSyncAt    DateTime?
+  metadata      String?  // JSON — workspace name, extra config
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, platform, accountId])
+  @@index([workspaceId])
+  @@index([platform])
+}
+
+// ============================================================
+// CONTACTS & IDENTITY RESOLUTION
+// ============================================================
+
+model Contact {
+  id                  String    @id @default(uuid())
+  workspaceId         String
+  name                String
+  displayName         String?   // preferred display name
+  avatar              String?
+  company             String?
+  role                String?
+  location            String?
+  bio                 String?   // AI-generated summary
+  relationshipScore   Int       @default(50)
+  personalityProfile  String?   // JSON — communication style, etc.
+  lastContactDate     DateTime?
+  notes               String?
+  metadata            String?   // JSON
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  workspace           Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  identities          ContactIdentity[]
+  messages            Message[]
+  conversations       Conversation[]
+  calendarEvents      CalendarEvent[]
+
+  @@index([workspaceId])
+  @@index([workspaceId, name])
+  @@index([relationshipScore])
+}
+
+model ContactIdentity {
+  id              String   @id @default(uuid())
+  contactId       String
+  platform        String   // "whatsapp", "slack", "telegram", "gmail", "linkedin", etc.
+  platformUserId  String   // phone number, slack ID, email, etc.
+  displayName     String?
+  email           String?
+  phone           String?
+  username        String?
+  avatarUrl       String?
+  networkContext   String?  // JSON — e.g. { workspace: "DarkHorse", channel: "#general" }
+  beeperUserId    String?  // Beeper's internal user ID for linking
+  verified        Boolean  @default(false) // auto-matched vs manually confirmed
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  contact         Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, platform, platformUserId])
+  @@index([contactId])
+  @@index([platform, platformUserId])
+  @@index([email])
+  @@index([phone])
+  @@index([beeperUserId])
+}
+
+// ============================================================
+// CONVERSATIONS & MESSAGES
+// ============================================================
+
+model Conversation {
+  id                String    @id @default(uuid())
+  workspaceId       String
+  externalId        String?   // Beeper chat ID or Gmail thread ID
+  channel           String    // "whatsapp", "slack", "telegram", "gmail"
+  type              String    @default("single") // "single", "group"
+  title             String
+  contactId         String?   // primary contact (null for groups)
+  lastMessageAt     DateTime
+  unreadCount       Int       @default(0)
+  priority          Int       @default(50)
+  isArchived        Boolean   @default(false)
+  isMuted           Boolean   @default(false)
+  isPinned          Boolean   @default(false)
+  channelContext    String?   // JSON — { workspace, channelName, groupName }
+  metadata          String?   // JSON
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact           Contact?  @relation(fields: [contactId], references: [id])
+  messages          Message[]
+  participants      ConversationParticipant[]
+
+  @@unique([workspaceId, externalId])
+  @@index([workspaceId])
+  @@index([workspaceId, channel])
+  @@index([contactId])
+  @@index([lastMessageAt])
+  @@index([priority])
+}
+
+model ConversationParticipant {
+  id              String   @id @default(uuid())
+  conversationId  String
+  contactId       String?  // null if unknown contact
+  externalUserId  String   // Beeper participant ID
+  displayName     String
+  isSelf          Boolean  @default(false)
+
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, externalUserId])
+  @@index([conversationId])
+  @@index([contactId])
+}
+
+model Message {
+  id              String    @id @default(uuid())
+  workspaceId     String
+  conversationId  String
+  externalId      String?   // Beeper message ID or Gmail message ID
+  channel         String
+  senderId        String?   // external sender ID
+  senderName      String
+  senderContactId String?   // resolved Contact ID
+  body            String
+  subject         String?
+  timestamp       DateTime
+  read            Boolean   @default(false)
+  priority        Int       @default(50)
+  messageType     String    @default("text") // "text", "image", "voice", "file", "system"
+  aiDraft         String?
+  topicLabel      String?
+  topicColor      String?
+  metadata        String?   // JSON — attachments, reactions, etc.
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  workspace       Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  contact         Contact?     @relation(fields: [senderContactId], references: [id])
+  aiMetadata      AIMetadata?
+  attachments     Attachment[]
+
+  @@unique([workspaceId, externalId])
+  @@index([workspaceId])
+  @@index([conversationId])
+  @@index([senderContactId])
+  @@index([channel])
+  @@index([timestamp])
+  @@index([priority])
+  @@index([read])
+}
+
+model Attachment {
+  id          String   @id @default(uuid())
+  messageId   String
+  type        String   // "image", "file", "voice", "video"
+  fileName    String?
+  mimeType    String?
+  fileSize    Int?
+  url         String?  // local or remote URL
+  thumbnailUrl String?
+  transcription String? // Whisper transcription for voice messages
+  metadata    String?  // JSON — dimensions, duration, etc.
+  createdAt   DateTime @default(now())
+
+  message     Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+// ============================================================
+// AI & INTELLIGENCE
+// ============================================================
+
+model AIMetadata {
+  id              String   @id @default(uuid())
+  messageId       String   @unique
+  priorityScore   Int
+  priorityReason  String
+  draftReply      String?
+  sentiment       String?
+  topics          String?  // JSON array
+  actionItems     String?  // JSON array
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  message         Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([priorityScore])
+}
+
+// ============================================================
+// CALENDAR
+// ============================================================
+
+model CalendarEvent {
+  id          String    @id @default(uuid())
+  workspaceId String
+  externalId  String?
+  title       String
+  startTime   DateTime
+  endTime     DateTime
+  attendees   String?   // JSON array
+  contactId   String?
+  briefing    String?
+  location    String?
+  metadata    String?   // JSON
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact     Contact?  @relation(fields: [contactId], references: [id])
+
+  @@index([workspaceId])
+  @@index([startTime])
+  @@index([contactId])
+}
+
+// ============================================================
+// SYNC STATE (track what we've already synced)
+// ============================================================
+
+model SyncState {
+  id            String   @id @default(uuid())
+  connectionId  String
+  entityType    String   // "chats", "messages", "contacts"
+  lastSyncAt    DateTime
+  cursor        String?  // pagination cursor for resuming
+  metadata      String?  // JSON
+  updatedAt     DateTime @updatedAt
+
+  @@unique([connectionId, entityType])
+  @@index([connectionId])
+}
