@@ -1,3 +1,9 @@
+/**
+ * POST /api/auth/logout
+ *
+ * Deletes the current session from the database and clears the `session`
+ * cookie. Safe to call even when the user is already logged out.
+ */
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { deleteSession } from '@/lib/auth';

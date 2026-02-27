@@ -1,3 +1,10 @@
+/**
+ * POST /api/sync
+ *
+ * Triggers a full Beeper → database sync for the authenticated workspace.
+ * Fetches new messages via BeeperService, processes them through SyncEngine,
+ * and returns a summary of items synced. Can be called manually or on a cron.
+ */
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireWorkspace } from '@/lib/auth';

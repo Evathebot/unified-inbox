@@ -41,11 +41,13 @@ export async function POST(request: NextRequest) {
     const conversationMessages = message.conversation?.messages || [];
     const draftReply = await generateDraftReply(message, conversationMessages);
 
-    // Optionally store the draft
-    await prisma.message.update({
-      where: { id: messageId },
-      data: { aiDraft: draftReply },
-    });
+    // Only persist real AI drafts — never store fallback/null
+    if (draftReply) {
+      await prisma.message.update({
+        where: { id: messageId },
+        data: { aiDraft: draftReply },
+      });
+    }
 
     return NextResponse.json({
       draft: draftReply,

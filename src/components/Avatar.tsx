@@ -1,8 +1,13 @@
+'use client';
+
+import PlatformLogo from './PlatformLogo';
+
 interface AvatarProps {
   src: string;
   name: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   online?: boolean;
+  channel?: string;
 }
 
 const sizeClasses = {
@@ -19,8 +24,28 @@ const dotSizes = {
   xl: 'w-4 h-4',
 };
 
-function isUrl(str: string) {
-  return str.startsWith('http://') || str.startsWith('https://') || str.startsWith('/');
+// Channel badge sizes: container px, logo px
+const channelBadgeSizes = {
+  sm:  { container: 'w-3.5 h-3.5', logo: 8 },
+  md:  { container: 'w-4 h-4',     logo: 10 },
+  lg:  { container: 'w-5 h-5',     logo: 12 },
+  xl:  { container: 'w-6 h-6',     logo: 14 },
+};
+
+/** Convert mxc://server/mediaId → Beeper Matrix media thumbnail URL */
+function convertMxcUrl(mxc: string): string {
+  const withoutScheme = mxc.slice('mxc://'.length);
+  const slashIdx = withoutScheme.indexOf('/');
+  if (slashIdx === -1) return '';
+  const server = withoutScheme.slice(0, slashIdx);
+  const mediaId = withoutScheme.slice(slashIdx + 1);
+  return `https://matrix.beeper.com/_matrix/media/v3/thumbnail/${server}/${mediaId}?width=96&height=96&method=crop`;
+}
+
+function resolveImageSrc(src: string): string | null {
+  if (src.startsWith('mxc://')) return convertMxcUrl(src);
+  if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('/')) return src;
+  return null;
 }
 
 function isEmoji(str: string) {
@@ -31,24 +56,62 @@ function getInitials(name: string) {
   return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 }
 
-export default function Avatar({ src, name, size = 'md', online }: AvatarProps) {
-  const isImage = isUrl(src);
+/**
+ * User avatar with optional online indicator and channel platform badge.
+ *
+ * Resolves the `src` in order of precedence:
+ * 1. `mxc://` URIs → converted to a Beeper Matrix thumbnail URL
+ * 2. `http(s)://` or root-relative paths → used as-is
+ * 3. Everything else (emoji, initials string, empty) → renders initials/emoji fallback
+ *
+ * If the image fails to load, the component falls back to initials/emoji silently.
+ * When `channel` is provided, a small platform logo badge appears at the bottom-right
+ * corner of the avatar (as in Beeper), and the online dot moves to the top-right to
+ * avoid overlap.
+ *
+ * @param src     - Avatar URL (`mxc://`, `https://`, `/path`) or emoji/name string for fallback
+ * @param name    - Display name used for initials generation and `<img>` alt text
+ * @param size    - Visual size: `'sm'` | `'md'` | `'lg'` | `'xl'` (default `'md'`)
+ * @param online  - Show a green presence dot when true
+ * @param channel - Platform key (`'slack'`, `'whatsapp'`, etc.) renders a badge icon
+ */
+export default function Avatar({ src, name, size = 'md', online, channel }: AvatarProps) {
+  const imageSrc = resolveImageSrc(src);
+  const badgeSize = channelBadgeSizes[size];
 
   return (
     <div className="relative shrink-0">
-      {isImage ? (
+      {imageSrc ? (
         <img
-          src={src}
+          src={imageSrc}
           alt={name}
           className={`${sizeClasses[size]} rounded-full object-cover bg-gray-200`}
+          onError={(e) => {
+            // Fall back to initials on load error
+            (e.currentTarget as HTMLImageElement).style.display = 'none';
+            (e.currentTarget.nextSibling as HTMLElement | null)?.style?.setProperty('display', 'flex');
+          }}
         />
-      ) : (
-        <div className={`${sizeClasses[size]} rounded-full bg-gray-200 flex items-center justify-center text-gray-600`}>
-          {isEmoji(src) ? src : getInitials(name)}
-        </div>
-      )}
-      {online && (
+      ) : null}
+      <div
+        className={`${sizeClasses[size]} rounded-full bg-gray-200 flex items-center justify-center text-gray-600 ${imageSrc ? 'hidden' : ''}`}
+      >
+        {isEmoji(src) ? src : getInitials(name)}
+      </div>
+
+      {/* Online dot — top-right when channel badge is present, bottom-right otherwise */}
+      {online && !channel && (
         <div className={`absolute bottom-0 right-0 ${dotSizes[size]} bg-green-500 rounded-full border-2 border-white`}></div>
+      )}
+      {online && channel && (
+        <div className={`absolute top-0 right-0 ${dotSizes[size]} bg-green-500 rounded-full border-2 border-white`}></div>
+      )}
+
+      {/* Channel badge — bottom-right, like Beeper */}
+      {channel && (
+        <div className={`absolute -bottom-0.5 -right-0.5 ${badgeSize.container} bg-white rounded-full border border-gray-200 flex items-center justify-center shadow-sm`}>
+          <PlatformLogo platform={channel} size={badgeSize.logo} />
+        </div>
       )}
     </div>
   );
