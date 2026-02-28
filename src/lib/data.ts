@@ -198,6 +198,11 @@ function transformMessage(dbMessage: any, conv?: { id: string; title: string; ty
   const cleanBody = parseBeeperText(dbMessage.body, rawSenderName);
   const isSystemEvent = isBeeperSystemEvent(dbMessage.body ?? '', cleanBody);
 
+  // Replace local Beeper bridge media URLs (localmxc://) with human-readable placeholders.
+  // These URLs are only accessible on the local machine and look meaningless in the UI.
+  const displayBody = cleanBody.replace(/localmxc:\/\/[^\s,;"'<>)]+/gi, '[Media]');
+
+
   return {
     id: dbMessage.id,
     channel: dbMessage.channel as any,
@@ -209,8 +214,8 @@ function transformMessage(dbMessage: any, conv?: { id: string; title: string; ty
     },
     subject: dbMessage.subject || undefined,
     // preview: ≤150 chars for list rows; body: full text for detail view
-    preview: cleanBody.length > 150 ? cleanBody.substring(0, 150) + '…' : cleanBody,
-    body: cleanBody,
+    preview: displayBody.length > 150 ? displayBody.substring(0, 150) + '…' : displayBody,
+    body: displayBody,
     externalId: conv?.externalId ?? undefined,
     timestamp: new Date(dbMessage.timestamp),
     priority: dbMessage.priority,
@@ -232,7 +237,7 @@ function transformMessage(dbMessage: any, conv?: { id: string; title: string; ty
         messages: [
           {
             from: dbMessage.senderName,
-            content: dbMessage.body,
+            content: displayBody,
             timestamp: new Date(dbMessage.timestamp),
           },
         ],
@@ -300,9 +305,11 @@ function transformContact(dbContact: any): Contact {
     channels,
     allPlatforms: channels,
     relationshipScore: dbContact.relationshipScore,
+    // Use a far-past sentinel when lastContactDate is unknown so that
+    // "Active Today" counts and "Just now" relative timestamps don't misfire.
     lastInteraction: dbContact.lastContactDate
       ? new Date(dbContact.lastContactDate)
-      : new Date(),
+      : new Date(0),
     bio: meta.bio || '',
     personality,
   };
@@ -436,7 +443,10 @@ export async function getContacts(search?: string): Promise<Contact[]> {
       take: 100,
     });
 
-    return contacts.map(transformContact);
+    return contacts
+      .map(transformContact)
+      // Filter out placeholder/unknown contacts that have no real identity
+      .filter(c => c.name && c.name !== 'Unknown' && c.name !== 'Unknown Contact');
   } catch (error) {
     console.error('Error fetching contacts from database:', error);
     return [];
@@ -515,8 +525,12 @@ export async function getBriefing(): Promise<BriefingData> {
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
+    // Exclude system events (reactions, renames, etc.) from briefing sections.
+    // System events use a {{sender}} template in the body.
+    const notSystemEvent = { NOT: { body: { contains: '{{sender}}' } } };
+
     const priorityMessages = await prisma.message.findMany({
-      where: { read: false },
+      where: { read: false, ...notSystemEvent },
       orderBy: { priority: 'desc' },
       take: 5,
       include: {
@@ -531,6 +545,7 @@ export async function getBriefing(): Promise<BriefingData> {
       where: {
         timestamp: { lt: oneDayAgo },
         read: false,
+        ...notSystemEvent,
       },
       orderBy: { timestamp: 'asc' },
       take: 10,

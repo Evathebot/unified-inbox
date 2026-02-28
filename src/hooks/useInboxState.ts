@@ -6,6 +6,7 @@ import { Message, Channel } from '@/lib/mockData';
 import { ConversationGroup, SortType, AccountFilter } from '@/components/inbox/types';
 
 const STORAGE_KEY = 'unified-inbox-read';
+const ARCHIVED_KEY = 'unified-inbox-archived';
 
 /**
  * Core inbox state management hook.
@@ -63,6 +64,25 @@ export function useInboxState(initialMessages: Message[]) {
       // ignore
     }
   }, [readMessages]);
+
+  // Load archived groups from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(ARCHIVED_KEY);
+      if (stored) setArchivedGroups(new Set(JSON.parse(stored) as string[]));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Persist archived groups to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(ARCHIVED_KEY, JSON.stringify([...archivedGroups]));
+    } catch {
+      // ignore
+    }
+  }, [archivedGroups]);
 
   const isMessageRead = (msg: Message) => !msg.unread || readMessages.has(msg.id);
 
@@ -218,6 +238,14 @@ export function useInboxState(initialMessages: Message[]) {
     }
   };
 
+  const handleUnarchive = (group: ConversationGroup) => {
+    setArchivedGroups(prev => {
+      const next = new Set(prev);
+      next.delete(group._groupKey);
+      return next;
+    });
+  };
+
   const handleMarkAllRead = () => {
     const newRead = new Set(readMessages);
     initialMessages.forEach(m => newRead.add(m.id));
@@ -282,10 +310,13 @@ export function useInboxState(initialMessages: Message[]) {
     activeCount,
     activeFiltersCount,
     getGreeting,
+    // Derived booleans
+    hasSelectedGroup: selectedGroup !== null,
     // Actions
     handleSelectGroup,
     handleDeselect: () => setSelectedGroup(null),
     handleArchive,
+    handleUnarchive,
     handleMarkAllRead,
   };
 }

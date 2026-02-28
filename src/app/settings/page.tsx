@@ -528,7 +528,7 @@ function SettingsContent() {
               {connectedChannels.map(ch => (
                 <div
                   key={ch.id}
-                  className="flex items-center justify-between p-3.5 rounded-xl bg-green-50 border border-green-100"
+                  className="flex items-center justify-between p-3.5 rounded-xl bg-green-50 border border-green-100 dark:bg-green-900/20 dark:border-green-800"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center shadow-sm">
@@ -560,7 +560,7 @@ function SettingsContent() {
               {disconnectedChannels.map(ch => (
                 <div
                   key={ch.id}
-                  className="flex items-center justify-between p-3.5 rounded-xl bg-gray-50 border border-gray-100"
+                  className="flex items-center justify-between p-3.5 rounded-xl bg-gray-50 border border-gray-100 dark:bg-gray-800 dark:border-gray-700"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center shadow-sm opacity-50">

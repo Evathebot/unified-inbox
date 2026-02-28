@@ -3,6 +3,7 @@ import BriefingCard from '@/components/BriefingCard';
 import MessageCard from '@/components/MessageCard';
 import CalendarEventCard from '@/components/CalendarEvent';
 import BriefingAISummary from '@/components/BriefingAISummary';
+import BriefingGreeting from '@/components/BriefingGreeting';
 import { getBriefing } from '@/lib/data';
 
 export const dynamic = 'force-dynamic';
@@ -34,11 +35,8 @@ export default async function BriefingPage() {
   return (
     <div className="min-h-screen p-6">
       <div className="max-w-6xl mx-auto">
-        {/* Hero Section */}
-        <div className="mb-6">
-          <h1 className="text-5xl font-bold text-gray-900 mb-1">{briefing.greeting}</h1>
-          <p className="text-xl text-gray-500">{briefing.date}</p>
-        </div>
+        {/* Hero Section — client component for correct local timezone */}
+        <BriefingGreeting />
 
         {/* AI Daily Summary — loaded client-side */}
         <BriefingAISummary

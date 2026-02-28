@@ -549,12 +549,12 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
         )}
 
         {/* ── Chat thread ───────────────────────────────────── */}
-        <div className={`flex-1 overflow-y-auto py-4 space-y-1 ${group.channel === 'slack' ? 'px-0 bg-white' : 'px-4 bg-[#f0f2f5]'}`}>
+        <div className={`flex-1 overflow-y-auto py-4 space-y-1 ${group.channel === 'slack' ? 'px-0 bg-white dark:bg-gray-900' : 'px-4 bg-[#f0f2f5] dark:bg-gray-800'}`}>
           {dayGroups.map(({ date, messages: dayMsgs }) => (
             <div key={date.toISOString()}>
               <div className={`flex items-center gap-3 my-4 ${group.channel === 'slack' ? 'px-4' : ''}`}>
                 <div className="flex-1 h-px bg-gray-300/60" />
-                <span className={`text-[11px] text-gray-400 font-medium shrink-0 px-2 ${group.channel === 'slack' ? 'bg-white' : 'bg-[#f0f2f5]'}`}>{formatDateSeparator(date)}</span>
+                <span className={`text-[11px] text-gray-400 font-medium shrink-0 px-2 ${group.channel === 'slack' ? 'bg-white dark:bg-gray-900' : 'bg-[#f0f2f5] dark:bg-gray-800'}`}>{formatDateSeparator(date)}</span>
                 <div className="flex-1 h-px bg-gray-300/60" />
               </div>
 

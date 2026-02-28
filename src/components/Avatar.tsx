@@ -70,7 +70,9 @@ function getInitials(name: string): string {
   if (!name) return '?';
   // Phone numbers — show generic icon char
   if (/^[\+\d]/.test(name) && /^[\+\d\s\-\(\)\.]+$/.test(name)) return '#';
-  const parts = name.trim().split(/\s+/).filter(Boolean);
+  // Strip parenthetical suffixes like "(bot)", "(work)", etc. before splitting
+  const cleaned = name.replace(/\s*\([^)]*\)/g, '').trim();
+  const parts = (cleaned || name).trim().split(/\s+/).filter(Boolean);
   return parts.slice(0, 2).map(n => n[0]).join('').toUpperCase() || '?';
 }
 

@@ -50,7 +50,11 @@ export default async function ContactProfilePage({ params }: ContactProfilePageP
             <div className="flex-1">
               <h1 className="text-2xl font-bold text-gray-900">{contact.name}</h1>
               <p className="text-sm text-gray-500 mt-0.5">
-                {contact.role} · {contact.company} · {contact.location || 'Unknown'}
+                {[
+                  contact.role !== 'Contact' ? contact.role : null,
+                  contact.company !== 'N/A' ? contact.company : null,
+                  contact.location || null,
+                ].filter(Boolean).join(' · ') || 'No details available'}
               </p>
 
               {/* Platform icons row */}

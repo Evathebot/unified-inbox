@@ -35,23 +35,25 @@ export default function PersonalityProfile({ personality }: PersonalityProfilePr
           );
         })}
 
-        {/* Interests */}
-        <div className="space-y-1 pt-2">
-          <div className="flex items-center gap-2 text-gray-500 text-sm">
-            <Lightbulb size={14} />
-            <span>Key Interests</span>
+        {/* Interests — only rendered when there are actual values */}
+        {personality.interests && personality.interests.length > 0 && (
+          <div className="space-y-1 pt-2">
+            <div className="flex items-center gap-2 text-gray-500 text-sm">
+              <Lightbulb size={14} />
+              <span>Key Interests</span>
+            </div>
+            <div className="flex flex-wrap gap-2 pl-6">
+              {personality.interests.map((interest) => (
+                <span
+                  key={interest}
+                  className="px-3 py-1 bg-orange-50 text-orange-600 rounded-full text-xs font-medium"
+                >
+                  {interest}
+                </span>
+              ))}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2 pl-6">
-            {personality.interests.map((interest) => (
-              <span
-                key={interest}
-                className="px-3 py-1 bg-orange-50 text-orange-600 rounded-full text-xs font-medium"
-              >
-                {interest}
-              </span>
-            ))}
-          </div>
-        </div>
+        )}
       </div>
     </GlassCard>
   );

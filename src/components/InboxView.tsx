@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { ConversationGroup } from '@/components/inbox/types';
 import { useInboxState } from '@/hooks/useInboxState';
 import ConversationList from '@/components/inbox/ConversationList';
 import ConversationDetail from '@/components/inbox/ConversationDetail';
@@ -12,6 +13,8 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
   const router = useRouter();
   const state = useInboxState(initialMessages);
   const [userName, setUserName] = useState('');
+  const [archivedToast, setArchivedToast] = useState<ConversationGroup | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -154,8 +157,9 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
         // Archive current conversation
         if (effectiveSelected) handleArchive(effectiveSelected);
       } else if (e.key === 'r') {
-        // Focus reply textarea
-        (document.querySelector('[data-reply-textarea]') as HTMLTextAreaElement)?.focus();
+        // Focus reply textarea — prevent the 'r' character from being typed into it
+        const el = document.querySelector('[data-reply-textarea]') as HTMLTextAreaElement;
+        if (el) { e.preventDefault(); el.focus(); }
       }
     };
 
@@ -163,18 +167,37 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // On mobile, show detail view when a conversation is selected or composing
-  const showMobileDetail = state.effectiveSelected || state.showCompose;
+  // Archive with toast + undo
+  const handleArchiveWithToast = useCallback((group: ConversationGroup) => {
+    state.handleArchive(group);
+    setArchivedToast(group);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setArchivedToast(null), 4000);
+  }, [state]);
+
+  const handleUndoArchive = useCallback(() => {
+    if (archivedToast) {
+      state.handleUnarchive(archivedToast);
+      setArchivedToast(null);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    }
+  }, [archivedToast, state]);
+
+  // On mobile, show detail view when a conversation is explicitly selected or composing.
+  // Use hasSelectedGroup (not effectiveSelected) so that after Back is tapped and
+  // selectedGroup is set to null, the panel actually hides even though effectiveSelected
+  // still resolves to groups[0] as a fallback.
+  const showMobileDetail = state.hasSelectedGroup || state.showCompose;
 
   return (
-    <div className="h-screen flex overflow-hidden">
+    <div className="h-screen flex overflow-hidden relative">
       {/* Left panel — hidden on mobile when detail is open */}
       <div className={`${showMobileDetail ? 'hidden lg:flex' : 'flex'} flex-col w-full lg:w-auto overflow-hidden`}>
         <ConversationList
           groups={state.conversationGroups}
           selectedGroup={state.effectiveSelected}
           onSelect={state.handleSelectGroup}
-          onArchive={state.handleArchive}
+          onArchive={handleArchiveWithToast}
           onMarkAllRead={state.handleMarkAllRead}
           searchQuery={state.searchQuery}
           setSearchQuery={state.setSearchQuery}
@@ -236,6 +259,18 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
           </div>
         )}
       </div>
+      {/* Archive undo toast */}
+      {archivedToast && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 px-4 py-3 bg-gray-900 text-white text-sm rounded-xl shadow-lg z-50 animate-in fade-in slide-in-from-bottom-2">
+          <span>Conversation archived</span>
+          <button
+            onClick={handleUndoArchive}
+            className="font-semibold text-blue-300 hover:text-blue-200 transition-colors"
+          >
+            Undo
+          </button>
+        </div>
+      )}
     </div>
   );
 }

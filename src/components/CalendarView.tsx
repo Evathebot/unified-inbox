@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CalendarPlus } from 'lucide-react';
 import CalendarEventCard from '@/components/CalendarEvent';
 import GlassCard from '@/components/GlassCard';
 import type { CalendarEvent } from '@/lib/mockData';
@@ -116,7 +116,26 @@ export default function CalendarView({ events }: CalendarViewProps) {
 
           {/* Event Detail Sidebar */}
           <div className="lg:col-span-1">
-            {selectedEvent && (
+            {events.length === 0 && (
+              <div className="sticky top-6">
+                <GlassCard className="p-6 text-center">
+                  <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center mx-auto mb-4">
+                    <CalendarPlus size={24} className="text-blue-500" />
+                  </div>
+                  <h3 className="text-gray-900 font-semibold mb-2">No calendar connected</h3>
+                  <p className="text-gray-500 text-sm mb-4 leading-relaxed">
+                    Sync Beeper Desktop to pull in your calendar events, or connect a calendar in Settings.
+                  </p>
+                  <a
+                    href="/settings"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition-colors font-medium"
+                  >
+                    Go to Settings
+                  </a>
+                </GlassCard>
+              </div>
+            )}
+            {events.length > 0 && selectedEvent && (
               <div className="sticky top-6">
                 <GlassCard className="p-6">
                   <h2 className="text-xl font-bold text-gray-900 mb-4">{selectedEvent.title}</h2>

@@ -65,7 +65,9 @@ export default function ContactsView({ initialContacts }: ContactsViewProps) {
             <p className="text-3xl font-bold text-gray-900">
               {
                 initialContacts.filter(
-                  (c) => Date.now() - c.lastInteraction.getTime() < 24 * 60 * 60 * 1000
+                  // Exclude epoch-fallback dates (contacts with no known last interaction)
+                  (c) => c.lastInteraction.getTime() > 0 &&
+                    Date.now() - c.lastInteraction.getTime() < 24 * 60 * 60 * 1000
                 ).length
               }
             </p>
