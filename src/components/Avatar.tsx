@@ -61,7 +61,8 @@ function resolveImageSrc(src: string): string | null {
 }
 
 function isEmoji(str: string) {
-  return [...str].length <= 2 && str.length <= 4;
+  // Must be non-empty, ≤2 codepoints, and not the generic person placeholder
+  return str.length > 0 && str !== '👤' && [...str].length <= 2 && str.length <= 4;
 }
 
 /** Generate up to 2 letter initials from a name, handling phone numbers gracefully */
@@ -98,7 +99,9 @@ export default function Avatar({ src, name, size = 'md', online, channel }: Avat
   const badgeSize = channelBadgeSizes[size];
 
   const showImage = !!imageSrc && !imgError;
-  const fallbackChar = isEmoji(src) ? src : getInitials(name);
+  // Use an emoji src as the avatar character only when it's a real non-person emoji.
+  // Empty strings and the generic 👤 placeholder always fall through to initials.
+  const fallbackChar = src && isEmoji(src) ? src : getInitials(name);
 
   return (
     <div className="relative shrink-0">

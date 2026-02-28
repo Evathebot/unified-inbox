@@ -204,7 +204,7 @@ function transformMessage(dbMessage: any, conv?: { id: string; title: string; ty
     channelContext,
     sender: {
       name: rawSenderName,
-      avatar: dbMessage.contact?.avatar || '👤',
+      avatar: dbMessage.contact?.avatar || '',
       online: false,
     },
     subject: dbMessage.subject || undefined,
@@ -295,7 +295,7 @@ function transformContact(dbContact: any): Contact {
     company: dbContact.company || 'N/A',
     role: meta.role || meta.title || 'Contact',
     location: meta.location || '',
-    avatar: dbContact.avatar || '👤',
+    avatar: dbContact.avatar || '',
     avatarUrl: (dbContact.avatar?.startsWith('http') || dbContact.avatar?.startsWith('mxc://')) ? dbContact.avatar : undefined,
     channels,
     allPlatforms: channels,
