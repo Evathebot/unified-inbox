@@ -31,15 +31,95 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
   }, [router]);
 
   // Pull new messages from Beeper Desktop → DB every 30 seconds.
-  // Uses server-fetch mode locally (server calls localhost:23373 directly).
+  //
+  // Strategy (two modes, auto-detected):
+  //
+  //  A) Browser-push (Vercel / production): The server cannot reach
+  //     localhost:23373 on the user's machine, but the browser can.
+  //     We fetch the stored Beeper token from our API, use it to call
+  //     Beeper Desktop directly from the browser, then POST the collected
+  //     data to /api/sync so the server can persist it.
+  //
+  //  B) Server-fetch (local dev): POST with no body → server calls
+  //     localhost:23373 directly. Used as the fallback when browser-push
+  //     fails or when the token endpoint is unavailable.
+  //
   // After each sync the next router.refresh() above picks up the new rows.
   useEffect(() => {
-    const sync = () => {
-      fetch('/api/sync', { method: 'POST' }).catch(() => {});
+    const browserPushSync = async () => {
+      try {
+        // Step 1: Retrieve the stored Beeper credentials from our DB.
+        const tokenRes = await fetch('/api/beeper/token');
+        if (!tokenRes.ok) {
+          // No active Beeper connection — fall back to server-fetch mode.
+          fetch('/api/sync', { method: 'POST' }).catch(() => {});
+          return;
+        }
+        const { apiUrl, accessToken } = await tokenRes.json();
+        if (!apiUrl || !accessToken) {
+          fetch('/api/sync', { method: 'POST' }).catch(() => {});
+          return;
+        }
+
+        const headers: Record<string, string> = {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+        };
+
+        // Step 2: Fetch accounts + chats in parallel from Beeper Desktop.
+        const [accountsRes, chatsRes] = await Promise.all([
+          fetch(`${apiUrl}/v1/accounts`, { headers, signal: AbortSignal.timeout(8000) }),
+          fetch(`${apiUrl}/v1/chats?limit=50&includeMuted=true`, { headers, signal: AbortSignal.timeout(8000) }),
+        ]);
+
+        if (!accountsRes.ok || !chatsRes.ok) {
+          // Beeper Desktop unreachable or returned an error; try server-fetch.
+          fetch('/api/sync', { method: 'POST' }).catch(() => {});
+          return;
+        }
+
+        const accountsData = await accountsRes.json();
+        const chatsData = await chatsRes.json();
+
+        // Normalise: Beeper can return the list as .value, .items, or a raw array.
+        const accounts: unknown[] = accountsData?.value ?? accountsData?.items ?? accountsData ?? [];
+        const chats: unknown[] = chatsData?.items ?? chatsData?.value ?? chatsData ?? [];
+
+        // Step 3: Fetch recent messages for each chat (parallel, best-effort).
+        const messagesMap: Record<string, unknown[]> = {};
+        await Promise.all(
+          (chats as Array<{ id: string }>).map(async (chat) => {
+            try {
+              const msgRes = await fetch(
+                `${apiUrl}/v1/chats/${encodeURIComponent(chat.id)}/messages?limit=20`,
+                { headers, signal: AbortSignal.timeout(8000) },
+              );
+              if (msgRes.ok) {
+                const msgData = await msgRes.json();
+                messagesMap[chat.id] = msgData?.items ?? msgData?.value ?? msgData ?? [];
+              }
+            } catch {
+              // Skip this chat — don't let one failure block the rest.
+            }
+          }),
+        );
+
+        // Step 4: Push everything to the server for DB persistence.
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accounts, chats, messagesMap }),
+        });
+      } catch {
+        // Network error (Beeper Desktop not running, CORS issue, etc.)
+        // Fall back to server-fetch so local dev still works.
+        fetch('/api/sync', { method: 'POST' }).catch(() => {});
+      }
     };
-    // Run once immediately so messages are fresh on first load, then repeat
-    sync();
-    const interval = setInterval(sync, 30_000);
+
+    // Run once immediately so messages are fresh on first load, then repeat.
+    browserPushSync();
+    const interval = setInterval(browserPushSync, 30_000);
     return () => clearInterval(interval);
   }, []);
 
