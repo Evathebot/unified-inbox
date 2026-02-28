@@ -413,49 +413,51 @@ function SettingsContent() {
 
           {beeperConnected ? (
             /* ── Connected state ── */
-            <div className="flex items-center gap-3 flex-wrap">
-              <button
-                onClick={handleSyncNow}
-                disabled={isBusy}
-                className="flex items-center gap-1.5 px-4 py-2 bg-blue-50 text-blue-700 text-sm rounded-lg font-medium hover:bg-blue-100 transition-all disabled:opacity-60"
-              >
-                <RefreshCw size={13} className={beeperStatus === 'syncing' ? 'animate-spin' : ''} />
-                {syncLabel}
-              </button>
-              <button
-                onClick={handleConnectBeeper}
-                disabled={isBusy}
-                className="px-4 py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-60"
-              >
-                Reconnect
-              </button>
-              {beeperLastSync && !syncProgress && (
-                <span className="text-xs text-gray-400 ml-auto">
-                  Last sync: {new Date(beeperLastSync).toLocaleTimeString()}
-                </span>
-              )}
-            </div>
-
-            {/* Sync progress bar — visible while syncing */}
-            {beeperStatus === 'syncing' && syncProgress && (
-              <div className="mt-3">
-                <div className="flex items-center justify-between text-xs text-gray-500 mb-1.5">
-                  <span className="truncate max-w-[260px]">
-                    Syncing {syncProgress.current} of {syncProgress.total}
-                    {syncProgress.chat ? ` · ${syncProgress.chat}` : ''}
+            <>
+              <div className="flex items-center gap-3 flex-wrap">
+                <button
+                  onClick={handleSyncNow}
+                  disabled={isBusy}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-50 text-blue-700 text-sm rounded-lg font-medium hover:bg-blue-100 transition-all disabled:opacity-60"
+                >
+                  <RefreshCw size={13} className={beeperStatus === 'syncing' ? 'animate-spin' : ''} />
+                  {syncLabel}
+                </button>
+                <button
+                  onClick={handleConnectBeeper}
+                  disabled={isBusy}
+                  className="px-4 py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-60"
+                >
+                  Reconnect
+                </button>
+                {beeperLastSync && !syncProgress && (
+                  <span className="text-xs text-gray-400 ml-auto">
+                    Last sync: {new Date(beeperLastSync).toLocaleTimeString()}
                   </span>
-                  <span className="shrink-0 ml-2 font-medium tabular-nums">
-                    {syncProgress.total > 0 ? Math.round((syncProgress.current / syncProgress.total) * 100) : 0}%
-                  </span>
-                </div>
-                <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-blue-500 rounded-full transition-all duration-300"
-                    style={{ width: `${syncProgress.total > 0 ? Math.round((syncProgress.current / syncProgress.total) * 100) : 0}%` }}
-                  />
-                </div>
+                )}
               </div>
-            )}
+
+              {/* Sync progress bar — visible while syncing */}
+              {beeperStatus === 'syncing' && syncProgress && (
+                <div className="mt-3">
+                  <div className="flex items-center justify-between text-xs text-gray-500 mb-1.5">
+                    <span className="truncate max-w-[260px]">
+                      Syncing {syncProgress.current} of {syncProgress.total}
+                      {syncProgress.chat ? ` · ${syncProgress.chat}` : ''}
+                    </span>
+                    <span className="shrink-0 ml-2 font-medium tabular-nums">
+                      {syncProgress.total > 0 ? Math.round((syncProgress.current / syncProgress.total) * 100) : 0}%
+                    </span>
+                  </div>
+                  <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                      style={{ width: `${syncProgress.total > 0 ? Math.round((syncProgress.current / syncProgress.total) * 100) : 0}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </>
           ) : (
             /* ── Not connected state ── */
             <div>
