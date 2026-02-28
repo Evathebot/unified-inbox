@@ -4,6 +4,7 @@
  */
 
 import { prisma } from './db';
+import { requireWorkspace } from './auth';
 import {
   mockContacts,
   type Message,
@@ -104,7 +105,7 @@ export function formatContactName(name: string): string {
   return name;
 }
 
-function transformMessage(dbMessage: any, conv?: { id: string; title: string; type: string }): Message {
+function transformMessage(dbMessage: any, conv?: { id: string; title: string; type: string; externalId?: string | null }): Message {
   // Extract topic from AIMetadata
   let topicLabel: string | undefined;
   let topicColor: string | undefined;
@@ -161,11 +162,16 @@ function transformMessage(dbMessage: any, conv?: { id: string; title: string; ty
       online: false,
     },
     subject: dbMessage.subject || undefined,
-    preview: dbMessage.body.substring(0, 100) + (dbMessage.body.length > 100 ? '...' : ''),
+    // preview: ≤150 chars for list rows; body: full text for detail view
+    preview: dbMessage.body.length > 150
+      ? dbMessage.body.substring(0, 150) + '…'
+      : dbMessage.body,
+    body: dbMessage.body,
+    externalId: conv?.externalId ?? undefined,
     timestamp: new Date(dbMessage.timestamp),
     priority: dbMessage.priority,
     unread: !dbMessage.read,
-    answered: dbMessage.read,
+    answered: false, // tracked per-conversation, not per-message
     account: 'work' as const,
     topicLabel,
     topicColor,
@@ -290,7 +296,10 @@ export async function getMessages(filters?: {
   messagesPerConvo?: number; // messages per conversation (default 50)
 }): Promise<Message[]> {
   try {
-    const convoWhere: any = {};
+    // Always scope to the authenticated workspace — prevents cross-user data leaks.
+    const workspace = await requireWorkspace();
+
+    const convoWhere: any = { workspaceId: workspace.id };
     const msgWhere: any = {};
 
     if (filters?.channel) {
@@ -320,7 +329,7 @@ export async function getMessages(filters?: {
 
     // Flatten: each conversation's messages → Message[], most-recent-first across all convos
     const allMessages = conversations.flatMap(conv =>
-      conv.messages.map(msg => transformMessage(msg, { id: conv.id, title: conv.title, type: conv.type }))
+      conv.messages.map(msg => transformMessage(msg, { id: conv.id, title: conv.title, type: conv.type, externalId: conv.externalId }))
     );
 
     return allMessages;

@@ -42,7 +42,7 @@ export function useInboxState(initialMessages: Message[]) {
   // Filters
   const [filterUnread, setFilterUnread] = useState(false);
   const [filterUnanswered, setFilterUnanswered] = useState(false);
-  const [sortBy, setSortBy] = useState<SortType>('priority');
+  const [sortBy, setSortBy] = useState<SortType>('recent');
   const [accountFilter, setAccountFilter] = useState<AccountFilter>('all');
 
   // Load read messages from localStorage on mount
@@ -67,7 +67,6 @@ export function useInboxState(initialMessages: Message[]) {
   const isMessageRead = (msg: Message) => !msg.unread || readMessages.has(msg.id);
 
   const unreadCount = initialMessages.filter((m) => !isMessageRead(m)).length;
-  const activeCount = initialMessages.length;
 
   // Broadcast unread count to sidebar whenever it changes
   useEffect(() => {
@@ -134,6 +133,7 @@ export function useInboxState(initialMessages: Message[]) {
           topicLabel: msg.topicLabel,
           topicColor: msg.topicColor,
           conversationId: msg.conversationId,
+          externalId: msg.externalId,
           isGroupConversation: isGroup,
           memberAvatars: isGroup ? [msg.sender.avatar] : undefined,
           memberNames: isGroup ? [msg.sender.name] : undefined,
@@ -156,6 +156,9 @@ export function useInboxState(initialMessages: Message[]) {
     return groups;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialMessages, searchQuery, filterUnread, filterUnanswered, accountFilter, channelFilter, sortBy, readMessages, archivedGroups]);
+
+  // Show conversation count (not message count) in the inbox header
+  const activeCount = conversationGroups.length;
 
   const effectiveSelected = selectedGroup || conversationGroups[0] || null;
 

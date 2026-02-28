@@ -260,7 +260,7 @@ export class SyncEngine {
         externalId: msg.id,
         channel,
         senderId: msg.senderID,
-        senderName: msg.senderName,
+        senderName: msg.isSender ? 'Me' : msg.senderName,
         senderContactId,
         body: msg.text || `[${messageType}]`,
         timestamp: new Date(msg.timestamp),

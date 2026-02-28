@@ -1,6 +1,6 @@
 'use client';
 
-import { SlidersHorizontal, Plus, Sparkles, Archive, CheckCheck } from 'lucide-react';
+import { SlidersHorizontal, Plus, Sparkles, Archive, CheckCheck, MessageSquare } from 'lucide-react';
 import Avatar from '@/components/Avatar';
 import GroupAvatar from '@/components/GroupAvatar';
 import SearchBar from '@/components/SearchBar';
@@ -268,7 +268,41 @@ export default function ConversationList({
         })}
 
         {groups.length === 0 && (
-          <div className="text-center py-12 text-gray-400 text-sm">No messages found</div>
+          <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+            {searchQuery || activeFiltersCount > 0 ? (
+              <>
+                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                  <SlidersHorizontal size={20} className="text-gray-400" />
+                </div>
+                <p className="text-sm font-medium text-gray-600 mb-1">No conversations match</p>
+                <p className="text-xs text-gray-400 mb-4">Try adjusting your search or filters</p>
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="text-xs text-blue-500 hover:text-blue-600 font-medium"
+                  >
+                    Clear search
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                  <MessageSquare size={20} className="text-gray-400" />
+                </div>
+                <p className="text-sm font-medium text-gray-600 mb-1">Your inbox is empty</p>
+                <p className="text-xs text-gray-400 mb-4 leading-relaxed">
+                  Connect your accounts and sync messages<br />to get started.
+                </p>
+                <a
+                  href="/settings"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-white bg-gray-900 hover:bg-gray-700 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  Go to Settings → Sync Now
+                </a>
+              </>
+            )}
+          </div>
         )}
       </div>
     </div>

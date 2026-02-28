@@ -22,7 +22,7 @@ import ReplyToolbar from './ReplyToolbar';
  * - **Gmail** — full-width email card layout with subject line.
  *
  * Additional features:
- * - AI Summary banner (dismissable)
+ * - AI Summary banner (dismissable, cached per conversation so it doesn't re-fire)
  * - AI-generated draft reply (editable before sending)
  * - Quick emoji reactions (hover to reveal)
  * - Message copy / forward actions
@@ -192,7 +192,9 @@ function ThreadPanel({ parentMsg, onClose }: ThreadPanelProps) {
               <span className="text-sm font-semibold text-gray-900">{parentMsg.sender.name}</span>
               <span className="text-[11px] text-gray-400">{formatTime(parentMsg.timestamp)}</span>
             </div>
-            <p className="text-sm text-gray-800 leading-relaxed break-words">{parentMsg.preview}</p>
+            <p className="text-sm text-gray-800 leading-relaxed break-words">
+              {parentMsg.body ?? parentMsg.preview}
+            </p>
           </div>
         </div>
       </div>
@@ -270,22 +272,43 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
   const [selectedThread, setSelectedThread] = useState<Message | null>(null);
 
   const threadBottomRef = useRef<HTMLDivElement>(null);
-  const conversationKey = `${group.senderName}|${group.channel}`;
+  // Use conversationId as the stable key when available, otherwise fall back to sender+channel
+  const conversationKey = group.conversationId ?? `${group.senderName}|${group.channel}`;
   const currentKeyRef = useRef(conversationKey);
+  // Cache AI results so switching back to a conversation doesn't re-fire 2 API calls
+  const aiCacheRef = useRef<Map<string, { summary: string | null; draft: string }>>(new Map());
 
   useEffect(() => {
     currentKeyRef.current = conversationKey;
     setLocalMessages([]);
-    setAiSummary(null);
-    setSummaryLoading(true);
     setSummaryDismissed(false);
-    setAiDraft('');
-    setDraftLoading(true);
     setReactions({});
     setSelectedThread(null);
 
+    // Snap to the bottom of the conversation immediately (instant, not animated)
+    requestAnimationFrame(() => {
+      threadBottomRef.current?.scrollIntoView({ behavior: 'instant' });
+    });
+
     const key = conversationKey;
-    const messages = group.messages.map(m => ({ sender: m.sender.name, body: m.preview }));
+
+    // If AI data is already cached for this conversation, restore it without fetching
+    const cached = aiCacheRef.current.get(key);
+    if (cached) {
+      setAiSummary(cached.summary);
+      setSummaryLoading(false);
+      setAiDraft(cached.draft);
+      setDraftLoading(false);
+      return;
+    }
+
+    // Fresh conversation — reset AI state and fetch
+    setAiSummary(null);
+    setSummaryLoading(true);
+    setAiDraft('');
+    setDraftLoading(true);
+
+    const messages = group.messages.map(m => ({ sender: m.sender.name, body: m.body ?? m.preview }));
 
     fetch('/api/ai/summarize', {
       method: 'POST',
@@ -295,8 +318,12 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
       .then(r => r.json())
       .then(d => {
         if (currentKeyRef.current !== key) return;
-        setAiSummary(d.summary || null);
+        const summary = d.summary || null;
+        setAiSummary(summary);
         setSummaryLoading(false);
+        // Merge into cache (draft may arrive later)
+        const existing = aiCacheRef.current.get(key);
+        aiCacheRef.current.set(key, { summary, draft: existing?.draft ?? '' });
       })
       .catch(() => { if (currentKeyRef.current !== key) return; setSummaryLoading(false); });
 
@@ -310,8 +337,12 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
         .then(r => r.json())
         .then(d => {
           if (currentKeyRef.current !== key) return;
-          setAiDraft(d.draft || '');
+          const draft = d.draft || '';
+          setAiDraft(draft);
           setDraftLoading(false);
+          // Merge into cache (summary may arrive later)
+          const existing = aiCacheRef.current.get(key);
+          aiCacheRef.current.set(key, { summary: existing?.summary ?? null, draft });
         })
         .catch(() => {
           if (currentKeyRef.current !== key) return;
@@ -324,6 +355,7 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationKey]);
 
+  // Smooth-scroll to bottom whenever the user sends a new local message
   useEffect(() => {
     if (localMessages.length > 0) {
       threadBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -333,6 +365,10 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
   const handleRegenerateDraft = () => {
     setAiDraft('');
     setDraftLoading(true);
+    // Invalidate cache entry for this conversation so next visit re-fetches
+    const existing = aiCacheRef.current.get(conversationKey);
+    if (existing) aiCacheRef.current.set(conversationKey, { ...existing, draft: '' });
+
     const latestMsg = group.messages[group.messages.length - 1];
     if (!latestMsg?.id) return;
     fetch('/api/ai/draft', {
@@ -341,7 +377,13 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
       body: JSON.stringify({ messageId: latestMsg.id }),
     })
       .then(r => r.json())
-      .then(d => { setAiDraft(d.draft || ''); setDraftLoading(false); })
+      .then(d => {
+        const draft = d.draft || '';
+        setAiDraft(draft);
+        setDraftLoading(false);
+        const ex = aiCacheRef.current.get(conversationKey);
+        aiCacheRef.current.set(conversationKey, { summary: ex?.summary ?? null, draft });
+      })
       .catch(() => { setAiDraft(''); setDraftLoading(false); });
   };
 
@@ -351,6 +393,7 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
       channel: group.channel,
       sender: { name: 'Me', avatar: '', online: true },
       preview: text,
+      body: text,
       timestamp: new Date(),
       priority: 0,
       unread: false,
@@ -362,14 +405,16 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
   }, [group.channel]);
 
   const handleSendDraft = (text: string) => {
-    fetch('/api/conversations/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ senderName: group.senderName, channel: group.channel, text }),
-    })
-      .then(r => r.json())
-      .then(d => { if (!d.demo) addLocalMessage(text); })
-      .catch(() => {});
+    // Show optimistically right away
+    addLocalMessage(text);
+    // Persist to DB via Mode A (conversationId-based save)
+    if (group.conversationId) {
+      fetch('/api/conversations/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId: group.conversationId, text, channel: group.channel }),
+      }).catch(() => {});
+    }
   };
 
   const handleReact = (msgId: string, emoji: string) => {
@@ -491,7 +536,9 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
                   const msgReactions = reactions[msg.id || String(idx)] || {};
                   const hasReactions = Object.keys(msgReactions).length > 0;
                   const msgId = msg.id || String(idx);
-                  const isImage = isImageUrl(msg.preview);
+                  // Use full body when available; fall back to (possibly truncated) preview
+                  const msgBody = msg.body ?? msg.preview;
+                  const isImage = isImageUrl(msgBody);
                   const threadCount = msg.thread?.messages?.length ?? 0;
                   const isThreadOpen = selectedThread?.id === msg.id;
 
@@ -518,10 +565,10 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
                           <HoverActions
                             isMe={isMe}
                             msgId={msgId}
-                            text={msg.preview}
+                            text={msgBody}
                             reactions={msgReactions}
                             onReact={(emoji) => handleReact(msgId, emoji)}
-                            onForward={() => handleForward(msg.preview)}
+                            onForward={() => handleForward(msgBody)}
                             onCopy={() => {}}
                             slackLayout
                           />
@@ -540,13 +587,13 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
 
                           {isImage ? (
                             <img
-                              src={resolveImageSrc(msg.preview)}
+                              src={resolveImageSrc(msgBody)}
                               alt="Shared image"
                               className="max-w-xs rounded-lg shadow-sm object-cover mt-1"
                               style={{ maxHeight: 280 }}
                             />
                           ) : (
-                            <p className="text-sm text-gray-800 leading-relaxed break-words">{msg.preview}</p>
+                            <p className="text-sm text-gray-800 leading-relaxed break-words whitespace-pre-wrap">{msgBody}</p>
                           )}
 
                           {hasReactions && (
@@ -598,10 +645,10 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
                           <HoverActions
                             isMe
                             msgId={msgId}
-                            text={msg.preview}
+                            text={msgBody}
                             reactions={msgReactions}
                             onReact={(emoji) => handleReact(msgId, emoji)}
-                            onForward={() => handleForward(msg.preview)}
+                            onForward={() => handleForward(msgBody)}
                             onCopy={() => {}}
                           />
 
@@ -611,7 +658,7 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
 
                           {isImage ? (
                             <img
-                              src={resolveImageSrc(msg.preview)}
+                              src={resolveImageSrc(msgBody)}
                               alt="Shared image"
                               className={`max-w-full rounded-2xl rounded-br-sm shadow-sm object-cover`}
                               style={{ maxHeight: 280 }}
@@ -625,7 +672,7 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
                               ${!isFirst && !isLast ? 'rounded-lg rounded-r-sm' : ''}
                               ${!isFirst && isLast ? 'rounded-2xl rounded-tr-sm rounded-t-lg rounded-br-md' : ''}
                             `}>
-                              {msg.preview}
+                              <span className="whitespace-pre-wrap break-words">{msgBody}</span>
                             </div>
                           )}
 
@@ -673,10 +720,10 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
                         <HoverActions
                           isMe={false}
                           msgId={msgId}
-                          text={msg.preview}
+                          text={msgBody}
                           reactions={msgReactions}
                           onReact={(emoji) => handleReact(msgId, emoji)}
-                          onForward={() => handleForward(msg.preview)}
+                          onForward={() => handleForward(msgBody)}
                           onCopy={() => {}}
                         />
 
@@ -689,7 +736,7 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
 
                         {isImage ? (
                           <img
-                            src={resolveImageSrc(msg.preview)}
+                            src={resolveImageSrc(msgBody)}
                             alt="Shared image"
                             className="max-w-full rounded-2xl rounded-bl-sm shadow-sm object-cover"
                             style={{ maxHeight: 280 }}
@@ -703,7 +750,7 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
                             ${!isFirst && !isLast ? 'rounded-lg rounded-l-sm' : ''}
                             ${!isFirst && isLast ? 'rounded-2xl rounded-tl-sm rounded-t-lg rounded-bl-md' : ''}
                           `}>
-                            {msg.preview}
+                            <span className="whitespace-pre-wrap break-words">{msgBody}</span>
                           </div>
                         )}
 
@@ -757,6 +804,8 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
           recipientName={group.senderName}
           channel={group.channel}
           channelLabel={channelLabel}
+          conversationId={group.conversationId}
+          externalId={group.externalId}
           onMessageSent={addLocalMessage}
         />
       </div>

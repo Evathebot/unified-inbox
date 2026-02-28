@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  Send, Loader2, Plus, Smile, Mic, MicOff, Clock,
-  Image, Paperclip, Camera, X, Check,
+  Send, Loader2, Plus, Smile, Mic, MicOff, Image, Paperclip, Camera, X, Check,
 } from 'lucide-react';
 
 interface ReplyToolbarProps {
   recipientName: string;
   channel: string;
   channelLabel?: string;
+  conversationId?: string;   // DB conversation UUID
+  externalId?: string;       // Beeper chat ID for browser-side send
   onMessageSent?: (text: string) => void;
 }
 
@@ -21,23 +22,40 @@ const EMOJI_LIST = [
   '💯','⚡','🌟','💪','🙏','😬','🤣','😇','🥺','🫶',
 ];
 
-const SEND_LATER_OPTIONS = [
-  { label: 'In 1 hour', minutes: 60 },
-  { label: 'Tomorrow 9 AM', minutes: null, special: 'tomorrow9am' },
-  { label: 'Monday 9 AM', minutes: null, special: 'monday9am' },
-  { label: 'This evening 6 PM', minutes: null, special: 'evening6pm' },
-];
-
 function formatAudioTime(seconds: number): string {
   const m = Math.floor(seconds / 60).toString().padStart(2, '0');
   const s = Math.floor(seconds % 60).toString().padStart(2, '0');
   return `${m}:${s}`;
 }
 
+/** Cache the Beeper token in memory so we don't refetch on every send. */
+let cachedBeeperToken: { apiUrl: string; accessToken: string } | null = null;
+let tokenFetchedAt = 0;
+const TOKEN_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+async function getBeeperToken(): Promise<{ apiUrl: string; accessToken: string } | null> {
+  if (cachedBeeperToken && Date.now() - tokenFetchedAt < TOKEN_TTL_MS) {
+    return cachedBeeperToken;
+  }
+  try {
+    const res = await fetch('/api/beeper/token');
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.apiUrl && data.accessToken) {
+      cachedBeeperToken = { apiUrl: data.apiUrl, accessToken: data.accessToken };
+      tokenFetchedAt = Date.now();
+      return cachedBeeperToken;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
 export default function ReplyToolbar({
   recipientName,
   channel,
   channelLabel,
+  conversationId,
+  externalId,
   onMessageSent,
 }: ReplyToolbarProps) {
   const [replyText, setReplyText] = useState('');
@@ -48,10 +66,6 @@ export default function ReplyToolbar({
 
   // Emoji picker
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-
-  // Send later
-  const [showSendLater, setShowSendLater] = useState(false);
-  const [scheduledToast, setScheduledToast] = useState<string | null>(null);
 
   // Audio recording
   const [isRecording, setIsRecording] = useState(false);
@@ -64,18 +78,25 @@ export default function ReplyToolbar({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const attachMenuRef = useRef<HTMLDivElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
-  const sendLaterRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Close menus on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (attachMenuRef.current && !attachMenuRef.current.contains(e.target as Node)) setShowAttachMenu(false);
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target as Node)) setShowEmojiPicker(false);
-      if (sendLaterRef.current && !sendLaterRef.current.contains(e.target as Node)) setShowSendLater(false);
     }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
+
+  // Reset state when conversation changes
+  useEffect(() => {
+    setReplyText('');
+    setSendState('idle');
+    setShowAttachMenu(false);
+    setShowEmojiPicker(false);
+  }, [conversationId]);
 
   // Audio timer
   useEffect(() => {
@@ -96,8 +117,7 @@ export default function ReplyToolbar({
       mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       mr.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        const url = URL.createObjectURL(blob);
-        setAudioBlobUrl(url);
+        setAudioBlobUrl(URL.createObjectURL(blob));
         stream.getTracks().forEach(t => t.stop());
       };
       mr.start();
@@ -121,6 +141,7 @@ export default function ReplyToolbar({
     setAudioSeconds(0);
   };
 
+  // Voice send: show a placeholder message (actual audio upload to Beeper not yet supported)
   const sendAudio = () => {
     if (!audioBlobUrl) return;
     onMessageSent?.('[🎙️ Voice message]');
@@ -130,7 +151,17 @@ export default function ReplyToolbar({
     setTimeout(() => setSendState('idle'), 2500);
   };
 
-  const handleSend = async () => {
+  /**
+   * Primary send handler.
+   *
+   * When we have a Beeper externalId, we send directly from the browser to
+   * Beeper Desktop (localhost:23373) — the server can't do this in production.
+   * On success we POST to /api/conversations/send to persist the message to DB.
+   *
+   * Fallback: if no externalId (e.g., non-Beeper conversation), we post to the
+   * server which returns guidance on how to proceed.
+   */
+  const handleSend = useCallback(async () => {
     const text = replyText.trim();
     if (!text || sendState === 'sending') return;
 
@@ -138,6 +169,58 @@ export default function ReplyToolbar({
     setReplyText('');
 
     try {
+      // ── Path 1: Browser-side send via Beeper Desktop ──────────────────
+      if (externalId) {
+        const token = await getBeeperToken();
+
+        if (!token) {
+          // No Beeper connection
+          setSendState('not_connected');
+          setReplyText(text);
+          setTimeout(() => setSendState('idle'), 4000);
+          return;
+        }
+
+        const encodedChatId = encodeURIComponent(externalId);
+        const beeperRes = await fetch(`${token.apiUrl}/v1/chats/${encodedChatId}/messages`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ text }),
+          signal: AbortSignal.timeout(10000),
+        });
+
+        if (!beeperRes.ok) {
+          const errText = await beeperRes.text().catch(() => '');
+          console.error('[Send] Beeper send failed:', beeperRes.status, errText);
+          throw new Error(`Beeper returned ${beeperRes.status}`);
+        }
+
+        const sentMsg = await beeperRes.json().catch(() => null);
+
+        // Persist to DB (best-effort — message was already delivered)
+        if (conversationId) {
+          fetch('/api/conversations/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              conversationId,
+              text,
+              channel,
+              externalMessageId: sentMsg?.id,
+            }),
+          }).catch(() => {});
+        }
+
+        setSendState('sent');
+        onMessageSent?.(text);
+        setTimeout(() => setSendState('idle'), 2500);
+        return;
+      }
+
+      // ── Path 2: No externalId — server-side fallback ──────────────────
       const res = await fetch('/api/conversations/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -156,19 +239,13 @@ export default function ReplyToolbar({
       setSendState('sent');
       onMessageSent?.(text);
       setTimeout(() => setSendState('idle'), 2500);
-    } catch {
+    } catch (err) {
+      console.error('[Send] error:', err);
       setSendState('error');
       setReplyText(text);
       setTimeout(() => setSendState('idle'), 3000);
     }
-  };
-
-  const handleSendLater = (option: typeof SEND_LATER_OPTIONS[number]) => {
-    setShowSendLater(false);
-    setScheduledToast(`Scheduled for ${option.label}`);
-    setTimeout(() => setScheduledToast(null), 3000);
-    setReplyText('');
-  };
+  }, [replyText, sendState, externalId, conversationId, channel, recipientName, onMessageSent]);
 
   const insertEmoji = (emoji: string) => {
     const ta = textareaRef.current;
@@ -198,7 +275,7 @@ export default function ReplyToolbar({
     return (
       <div className="bg-white border-t border-gray-200">
         <div className="flex items-center justify-center gap-2 py-4 text-red-500 text-sm">
-          Failed to send — check your Beeper connection
+          Failed to send — check your Beeper connection in Settings
         </div>
       </div>
     );
@@ -211,7 +288,8 @@ export default function ReplyToolbar({
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
-          Beeper not connected — configure it in Settings
+          Beeper not connected —{' '}
+          <a href="/settings" className="underline hover:text-amber-700">open Settings</a>
         </div>
       </div>
     );
@@ -224,12 +302,10 @@ export default function ReplyToolbar({
     return (
       <div className="bg-white border-t border-gray-200 px-3 py-3">
         <div className="flex items-center gap-3">
-          {/* Cancel */}
           <button onClick={cancelAudio} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors">
             <X size={16} />
           </button>
 
-          {/* Waveform / player */}
           <div className="flex-1 bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2 flex items-center gap-3">
             {isRecording ? (
               <>
@@ -245,13 +321,10 @@ export default function ReplyToolbar({
                 </span>
               </>
             ) : (
-              <>
-                <audio src={audioBlobUrl!} controls className="h-7 w-full" />
-              </>
+              <audio src={audioBlobUrl!} controls className="h-7 w-full" />
             )}
           </div>
 
-          {/* Stop / Send */}
           {isRecording ? (
             <button
               onClick={stopRecording}
@@ -277,18 +350,28 @@ export default function ReplyToolbar({
   // ── Default compose bar ──────────────────────────────────
   return (
     <div className="bg-white border-t border-gray-200 px-3 py-3 relative">
-      {/* Scheduled toast */}
-      {scheduledToast && (
-        <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-3 py-1.5 rounded-xl shadow z-50 whitespace-nowrap flex items-center gap-1.5">
-          <Clock size={11} /> {scheduledToast}
-        </div>
-      )}
+      {/* Hidden file input for attachments */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) {
+            // For now, insert filename as placeholder text until full file upload is implemented
+            setReplyText(prev => prev ? `${prev} [${file.name}]` : `[${file.name}]`);
+            e.target.value = '';
+          }
+          setShowAttachMenu(false);
+        }}
+      />
 
       <div className="flex items-end gap-2">
         {/* Plus / Attachments */}
         <div className="relative shrink-0" ref={attachMenuRef}>
           <button
-            onClick={() => { setShowAttachMenu(p => !p); setShowEmojiPicker(false); setShowSendLater(false); }}
+            onClick={() => { setShowAttachMenu(p => !p); setShowEmojiPicker(false); }}
             className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-colors"
             title="Attach"
           >
@@ -296,13 +379,22 @@ export default function ReplyToolbar({
           </button>
           {showAttachMenu && (
             <div className="absolute bottom-11 left-0 bg-white border border-gray-200 rounded-2xl shadow-lg overflow-hidden z-30 min-w-[160px]">
-              <button className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-sm text-gray-700 transition-colors">
+              <button
+                onClick={() => { fileInputRef.current?.setAttribute('accept', 'image/*,video/*'); fileInputRef.current?.click(); }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-sm text-gray-700 transition-colors"
+              >
                 <Image size={16} className="text-blue-500" /> Photo & Video
               </button>
-              <button className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-sm text-gray-700 transition-colors">
+              <button
+                onClick={() => { fileInputRef.current?.setAttribute('accept', 'image/*'); fileInputRef.current?.click(); }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-sm text-gray-700 transition-colors"
+              >
                 <Camera size={16} className="text-green-500" /> Camera
               </button>
-              <button className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-sm text-gray-700 transition-colors">
+              <button
+                onClick={() => { fileInputRef.current?.setAttribute('accept', '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt'); fileInputRef.current?.click(); }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-sm text-gray-700 transition-colors"
+              >
                 <Paperclip size={16} className="text-orange-500" /> Document
               </button>
             </div>
@@ -329,9 +421,8 @@ export default function ReplyToolbar({
           )}
 
           <div className="flex items-end bg-gray-100 rounded-2xl px-3 py-2 gap-2">
-            {/* Emoji button inside input */}
             <button
-              onClick={() => { setShowEmojiPicker(p => !p); setShowAttachMenu(false); setShowSendLater(false); }}
+              onClick={() => { setShowEmojiPicker(p => !p); setShowAttachMenu(false); }}
               className="shrink-0 text-gray-400 hover:text-yellow-500 transition-colors self-end mb-0.5"
               title="Emoji"
             >
@@ -360,51 +451,25 @@ export default function ReplyToolbar({
           </div>
         </div>
 
-        {/* Send / Send later */}
-        <div className="relative shrink-0" ref={sendLaterRef}>
+        {/* Send / Mic */}
+        <div className="relative shrink-0">
           {replyText.trim() ? (
-            <div className="flex items-center">
-              <button
-                onClick={handleSend}
-                disabled={isSending}
-                className="w-9 h-9 rounded-full ai-badge text-white flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-50"
-                title="Send"
-              >
-                {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}
-              </button>
-              <button
-                onClick={() => { setShowSendLater(p => !p); setShowAttachMenu(false); setShowEmojiPicker(false); }}
-                className="w-5 h-5 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-600 transition-colors -ml-1 -mt-3 z-10 relative"
-                title="Send later"
-              >
-                <Clock size={10} />
-              </button>
-            </div>
+            <button
+              onClick={handleSend}
+              disabled={isSending}
+              className="w-9 h-9 rounded-full ai-badge text-white flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-50"
+              title="Send (Enter)"
+            >
+              {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}
+            </button>
           ) : (
             <button
               onClick={startRecording}
               className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-colors"
-              title="Record"
+              title="Record voice message"
             >
               <Mic size={17} />
             </button>
-          )}
-
-          {/* Send later dropdown */}
-          {showSendLater && replyText.trim() && (
-            <div className="absolute bottom-11 right-0 bg-white border border-gray-200 rounded-2xl shadow-lg overflow-hidden z-30 min-w-[180px]">
-              <p className="text-[11px] text-gray-400 font-medium px-4 pt-2.5 pb-1">Send later</p>
-              {SEND_LATER_OPTIONS.map(opt => (
-                <button
-                  key={opt.label}
-                  onClick={() => handleSendLater(opt)}
-                  className="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-gray-50 text-sm text-gray-700 transition-colors"
-                >
-                  <Clock size={13} className="text-gray-400" />
-                  {opt.label}
-                </button>
-              ))}
-            </div>
           )}
         </div>
       </div>

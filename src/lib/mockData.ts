@@ -17,7 +17,9 @@ export interface Message {
     online: boolean;
   };
   subject?: string;
-  preview: string;
+  preview: string;       // ≤150-char snippet used in conversation list rows
+  body?: string;         // full message body used in conversation detail view
+  externalId?: string;   // Beeper conversation externalId (chat ID) for browser-side send
   timestamp: Date;
   priority: number;
   unread: boolean;

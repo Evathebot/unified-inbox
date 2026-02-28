@@ -66,6 +66,7 @@ function SettingsContent() {
   const [beeperStatus, setBeeperStatus] = useState<BeeperStatus>('idle');
   const [beeperError, setBeeperError] = useState('');
   const [syncStats, setSyncStats] = useState<{ conversations?: number; messages?: number; contacts?: number }>({});
+  const [syncProgress, setSyncProgress] = useState<{ current: number; total: number; chat: string } | null>(null);
   const [beeperApiUrl, setBeeperApiUrl] = useState('http://localhost:23373');
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -271,14 +272,20 @@ function SettingsContent() {
         console.error('[Sync] Beeper fetch error:', errMsg);
         setBeeperError(`Cannot reach Beeper Desktop at ${apiUrl}. Make sure Beeper Desktop is running on this Mac. (${errMsg})`);
         setBeeperStatus('sync-error');
+        setSyncProgress(null);
         setTimeout(() => setBeeperStatus('idle'), 5000);
         return;
       }
 
-      // Step 3: Fetch messages for each chat (in parallel, up to 20 per chat)
+      // Step 3: Fetch messages for each chat — run in parallel, update progress as each resolves
       const messagesMap: Record<string, any[]> = {};
+      let completed = 0;
+      const total = chats.length;
+      if (total > 0) setSyncProgress({ current: 0, total, chat: 'Starting…' });
+
       await Promise.all(
         chats.map(async (chat: any) => {
+          const chatName: string = chat.title || chat.displayName || chat.name || chat.id || 'chat';
           try {
             const encodedId = encodeURIComponent(chat.id);
             const msgRes = await fetch(`${apiUrl}/v1/chats/${encodedId}/messages?limit=20`, {
@@ -291,8 +298,11 @@ function SettingsContent() {
           } catch {
             // individual chat failure is non-fatal
           }
+          completed++;
+          setSyncProgress({ current: completed, total, chat: chatName });
         })
       );
+      setSyncProgress(null);
 
       // Step 4: Push all the data to the server for processing + DB storage
       const res = await fetch('/api/sync', {
@@ -321,6 +331,7 @@ function SettingsContent() {
     } catch {
       setBeeperError('Sync failed. Is Beeper Desktop running?');
       setBeeperStatus('sync-error');
+      setSyncProgress(null);
       setTimeout(() => setBeeperStatus('idle'), 4000);
     }
   };
@@ -418,12 +429,33 @@ function SettingsContent() {
               >
                 Reconnect
               </button>
-              {beeperLastSync && (
+              {beeperLastSync && !syncProgress && (
                 <span className="text-xs text-gray-400 ml-auto">
                   Last sync: {new Date(beeperLastSync).toLocaleTimeString()}
                 </span>
               )}
             </div>
+
+            {/* Sync progress bar — visible while syncing */}
+            {beeperStatus === 'syncing' && syncProgress && (
+              <div className="mt-3">
+                <div className="flex items-center justify-between text-xs text-gray-500 mb-1.5">
+                  <span className="truncate max-w-[260px]">
+                    Syncing {syncProgress.current} of {syncProgress.total}
+                    {syncProgress.chat ? ` · ${syncProgress.chat}` : ''}
+                  </span>
+                  <span className="shrink-0 ml-2 font-medium tabular-nums">
+                    {syncProgress.total > 0 ? Math.round((syncProgress.current / syncProgress.total) * 100) : 0}%
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                    style={{ width: `${syncProgress.total > 0 ? Math.round((syncProgress.current / syncProgress.total) * 100) : 0}%` }}
+                  />
+                </div>
+              </div>
+            )}
           ) : (
             /* ── Not connected state ── */
             <div>

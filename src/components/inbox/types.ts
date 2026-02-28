@@ -14,6 +14,7 @@ export interface ConversationGroup {
   topicLabel?: string;
   topicColor?: string;
   conversationId?: string;
+  externalId?: string;        // Beeper chat externalId for browser-side send
   isGroupConversation?: boolean;
   memberAvatars?: string[];
   memberNames?: string[];
