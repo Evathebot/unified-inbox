@@ -19,7 +19,6 @@ const createPrismaClient = () => {
 
   if (tursoUrl) {
     // Production: use Turso (libSQL) — works on Vercel serverless
-    // PrismaLibSql accepts a Config object (url + authToken) directly
     const adapter = new PrismaLibSql({
       url: tursoUrl,
       authToken: tursoToken,
@@ -28,6 +27,17 @@ const createPrismaClient = () => {
       adapter,
       log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
     });
+  }
+
+  // On Vercel without TURSO_DATABASE_URL: throw a clear error rather than
+  // attempting to open a SQLite file that doesn't exist on the serverless filesystem.
+  if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'TURSO_DATABASE_URL is not set. ' +
+      'Go to Vercel → Project → Settings → Environment Variables and add ' +
+      'TURSO_DATABASE_URL and TURSO_AUTH_TOKEN for the Production environment, ' +
+      'then redeploy.'
+    );
   }
 
   // Local development: use better-sqlite3
