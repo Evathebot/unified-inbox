@@ -143,6 +143,7 @@ function SettingsContent() {
       .then(data => {
         setBeeperConnected(data.connected ?? false);
         if (data.lastSyncAt) setBeeperLastSync(data.lastSyncAt);
+        if (data.apiUrl) setBeeperApiUrl(data.apiUrl);
       })
       .catch(() => {});
 
@@ -234,10 +235,62 @@ function SettingsContent() {
     setBeeperStatus('syncing');
     setBeeperError('');
     try {
-      const res = await fetch('/api/sync', { method: 'POST' });
+      // Step 1: Get the Beeper access token from the server
+      const tokenRes = await fetch('/api/beeper/token');
+      if (!tokenRes.ok) {
+        setBeeperError('No active Beeper connection — please reconnect.');
+        setBeeperStatus('connect-error');
+        return;
+      }
+      const { apiUrl, accessToken } = await tokenRes.json();
+      const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}` };
+
+      // Step 2: Fetch accounts + chats from Beeper Desktop in the browser
+      //         (browser can reach localhost:23373; the Vercel server cannot)
+      let accounts: any[] = [];
+      let chats: any[] = [];
+      try {
+        const [acctRes, chatRes] = await Promise.all([
+          fetch(`${apiUrl}/v1/accounts`, { headers, signal: AbortSignal.timeout(15000) }),
+          fetch(`${apiUrl}/v1/chats?limit=50&includeMuted=true`, { headers, signal: AbortSignal.timeout(15000) }),
+        ]);
+        if (acctRes.ok) accounts = (await acctRes.json())?.value || (await acctRes.clone().json())?.items || accounts;
+        if (chatRes.ok) chats = (await chatRes.json())?.items || chats;
+      } catch {
+        setBeeperError(`Cannot reach Beeper Desktop at ${apiUrl}. Make sure Beeper Desktop is running on this Mac.`);
+        setBeeperStatus('sync-error');
+        setTimeout(() => setBeeperStatus('idle'), 5000);
+        return;
+      }
+
+      // Step 3: Fetch messages for each chat (in parallel, up to 20 per chat)
+      const messagesMap: Record<string, any[]> = {};
+      await Promise.all(
+        chats.map(async (chat: any) => {
+          try {
+            const encodedId = encodeURIComponent(chat.id);
+            const msgRes = await fetch(`${apiUrl}/v1/chats/${encodedId}/messages?limit=20`, {
+              headers,
+              signal: AbortSignal.timeout(10000),
+            });
+            if (msgRes.ok) {
+              messagesMap[chat.id] = (await msgRes.json())?.items || [];
+            }
+          } catch {
+            // individual chat failure is non-fatal
+          }
+        })
+      );
+
+      // Step 4: Push all the data to the server for processing + DB storage
+      const res = await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accounts, chats, messagesMap }),
+      });
       const data = await res.json();
+
       if (res.status === 401) {
-        // Token expired — nudge towards reconnect
         setBeeperError(data.error || 'Token expired — click Reconnect to re-authorize.');
         setBeeperStatus('connect-error');
         return;

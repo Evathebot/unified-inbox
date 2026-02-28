@@ -2,14 +2,42 @@
  * POST /api/sync
  *
  * Triggers a full Beeper → database sync for the authenticated workspace.
- * Fetches new messages via BeeperService, processes them through SyncEngine,
- * and returns a summary of items synced. Can be called manually or on a cron.
+ *
+ * Two modes:
+ *  A) Browser-push mode: The request body contains `{ accounts, chats, messagesMap }`
+ *     pre-fetched by the browser from localhost:23373. Used in production (Vercel)
+ *     where the server cannot reach the user's local Beeper Desktop.
+ *  B) Server-fetch mode: No body. The server fetches directly from Beeper Desktop.
+ *     Only works in local development where localhost:23373 is accessible.
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireWorkspace } from '@/lib/auth';
 import { BeeperService } from '@/lib/services/beeper';
 import { SyncEngine } from '@/lib/services/sync-engine';
+
+/**
+ * A drop-in BeeperService replacement that serves pre-fetched data from
+ * the browser instead of making HTTP calls. Used in production where the
+ * server can't reach localhost:23373.
+ */
+class BrowserPushedBeeperService {
+  constructor(
+    private accounts: any[],
+    private chats: any[],
+    private messagesMap: Record<string, any[]>,
+  ) {}
+
+  async getAccounts() { return this.accounts; }
+
+  async getChats() {
+    return { items: this.chats, hasMore: false, nextCursor: undefined };
+  }
+
+  async getMessages(chatId: string) {
+    return { items: this.messagesMap[chatId] ?? [], hasMore: false };
+  }
+}
 
 /**
  * Format a raw Beeper contact name into something human-readable.
@@ -68,7 +96,7 @@ async function cleanupContactNames(workspaceId: string): Promise<number> {
 /**
  * POST /api/sync — Trigger a full sync from Beeper
  */
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const workspace = await requireWorkspace();
 
@@ -88,13 +116,29 @@ export async function POST() {
       );
     }
 
-    // Create Beeper service and sync engine
-    const beeper = new BeeperService({
-      apiUrl: connection.apiUrl,
-      accessToken: connection.accessToken,
-    });
+    // Check if the browser pushed pre-fetched Beeper data (production mode)
+    let beeper: BeeperService | BrowserPushedBeeperService;
+    let body: any = {};
+    try { body = await request.json(); } catch { /* no body — server-fetch mode */ }
 
-    const syncEngine = new SyncEngine(prisma, beeper, workspace.id, connection.id);
+    if (body?.accounts && body?.chats) {
+      // Mode A: browser pre-fetched the data
+      console.log(`[Sync] Browser-push mode — ${body.chats.length} chats received`);
+      beeper = new BrowserPushedBeeperService(
+        body.accounts,
+        body.chats,
+        body.messagesMap ?? {},
+      );
+    } else {
+      // Mode B: server-fetch mode (local dev only)
+      console.log('[Sync] Server-fetch mode — calling Beeper Desktop directly');
+      beeper = new BeeperService({
+        apiUrl: connection.apiUrl,
+        accessToken: connection.accessToken,
+      });
+    }
+
+    const syncEngine = new SyncEngine(prisma, beeper as BeeperService, workspace.id, connection.id);
 
     // Run full sync
     const result = await syncEngine.fullSync({

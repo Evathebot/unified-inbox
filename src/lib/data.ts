@@ -5,10 +5,7 @@
 
 import { prisma } from './db';
 import {
-  mockMessages,
   mockContacts,
-  mockBriefing,
-  mockCalendarEvents,
   type Message,
   type Contact,
   type CalendarEvent,
@@ -321,8 +318,6 @@ export async function getMessages(filters?: {
       },
     });
 
-    if (conversations.length === 0) throw new Error('no conversations in db');
-
     // Flatten: each conversation's messages → Message[], most-recent-first across all convos
     const allMessages = conversations.flatMap(conv =>
       conv.messages.map(msg => transformMessage(msg, { id: conv.id, title: conv.title, type: conv.type }))
@@ -330,8 +325,8 @@ export async function getMessages(filters?: {
 
     return allMessages;
   } catch (error) {
-    console.error('Error fetching messages from database, falling back to mock data:', error);
-    return mockMessages;
+    console.error('Error fetching messages from database:', error);
+    return [];
   }
 }
 
@@ -375,7 +370,7 @@ export async function getContacts(search?: string): Promise<Contact[]> {
     return contacts.map(transformContact);
   } catch (error) {
     console.error('Error fetching contacts from database:', error);
-    return mockContacts;
+    return [];
   }
 }
 
@@ -549,7 +544,16 @@ export async function getBriefing(): Promise<BriefingData> {
     };
   } catch (error) {
     console.error('Error fetching briefing from database:', error);
-    return mockBriefing;
+    const now = new Date();
+    return {
+      greeting: now.getHours() < 12 ? 'Good morning' : now.getHours() < 17 ? 'Good afternoon' : 'Good evening',
+      date: now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+      priorityMessages: [],
+      overdueReplies: [],
+      calendarEvents: [],
+      actionItems: [],
+      stats: { messagesToday: 0, unreadCount: 0, overdueCount: 0 },
+    };
   }
 }
 
@@ -587,6 +591,6 @@ export async function getCalendarEvents(options?: {
     return events.map(transformCalendarEvent);
   } catch (error) {
     console.error('Error fetching calendar events from database:', error);
-    return mockCalendarEvents;
+    return [];
   }
 }
