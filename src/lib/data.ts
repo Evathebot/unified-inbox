@@ -144,7 +144,7 @@ export function formatContactName(name: string): string {
   return name;
 }
 
-function transformMessage(dbMessage: any, conv?: { id: string; title: string; type: string; externalId?: string | null }): Message {
+function transformMessage(dbMessage: any, conv?: { id: string; title: string; type: string; externalId?: string | null; contactName?: string; contactAvatar?: string }): Message {
   // Extract topic from AIMetadata
   let topicLabel: string | undefined;
   let topicColor: string | undefined;
@@ -239,7 +239,10 @@ function transformMessage(dbMessage: any, conv?: { id: string; title: string; ty
       },
     aiDraft: dbMessage.aiDraft || dbMessage.aiMetadata?.draftReply || undefined,
     conversationId: conv?.id ?? dbMessage.conversationId,
-    conversationTitle: conv?.title,
+    // Use conv.title first, then fall back to the contact's name on the conversation.
+    // This ensures DMs without a group title still display the contact's real name
+    // instead of "Me" when the most-recently-fetched message was sent by the user.
+    conversationTitle: conv?.title || conv?.contactName || undefined,
     isGroupConversation: (conv?.type ?? dbMessage.conversation?.type) === 'group',
     isSystemEvent,
   };
@@ -360,6 +363,9 @@ export async function getMessages(filters?: {
       orderBy: { lastMessageAt: 'desc' },
       take: filters?.limit || 100,
       include: {
+        // Include the conversation's own contact so we always have a display name
+        // even for DMs where all fetched messages were sent by the current user.
+        contact: { select: { id: true, name: true, displayName: true, avatar: true } },
         messages: {
           where: Object.keys(msgWhere).length > 0 ? msgWhere : undefined,
           orderBy: { timestamp: 'desc' },
@@ -373,9 +379,18 @@ export async function getMessages(filters?: {
     });
 
     // Flatten: each conversation's messages → Message[], most-recent-first across all convos
-    const allMessages = conversations.flatMap(conv =>
-      conv.messages.map(msg => transformMessage(msg, { id: conv.id, title: conv.title, type: conv.type, externalId: conv.externalId }))
-    );
+    const allMessages = conversations.flatMap(conv => {
+      const contactName = conv.contact?.displayName || conv.contact?.name || undefined;
+      const contactAvatar = conv.contact?.avatar || undefined;
+      return conv.messages.map(msg => transformMessage(msg, {
+        id: conv.id,
+        title: conv.title,
+        type: conv.type,
+        externalId: conv.externalId,
+        contactName,
+        contactAvatar,
+      }));
+    });
 
     return allMessages;
   } catch (error) {
