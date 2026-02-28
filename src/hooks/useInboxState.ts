@@ -151,9 +151,20 @@ export function useInboxState(initialMessages: Message[]) {
 
     groups.forEach(g => g.messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()));
 
-    // Second pass: for DM conversations where the seed message was from "Me"
-    // (or conv.title was null), fix both the display name and avatar by looking
-    // for the first message sent by the other person in the group.
+    // Returns true if the name looks like a real human name rather than a raw
+    // identifier (phone number, Matrix ID, "Me", "Unknown", or empty string).
+    const looksLikeRealName = (name: string | undefined) =>
+      !!name &&
+      name !== 'Me' &&
+      name !== 'Unknown' &&
+      !/^[\+\d\s\(\)\-\.]{7,}$/.test(name) &&  // phone numbers
+      !name.includes(':beeper') &&               // Matrix IDs
+      !name.startsWith('@');                     // other Matrix-style IDs
+
+    // Second pass: for DM conversations where the seed message was from "Me",
+    // used a phone number / Matrix ID, or had no real name at all — fix both the
+    // display name and avatar by looking for the first message sent by the other
+    // person in the group that carries a proper human name.
     groups.forEach(g => {
       if (!g.isGroupConversation) {
         const contactMsg = g.messages.find(m => m.sender.name !== 'Me');
@@ -162,8 +173,9 @@ export function useInboxState(initialMessages: Message[]) {
           if (!g.senderAvatar || g.senderAvatar === '👤') {
             g.senderAvatar = contactMsg.sender.avatar;
           }
-          // Fix name when conv.title was null and we fell through to "Me"
-          if (!g.senderName || g.senderName === 'Me') {
+          // Fix name when conv.title was null and we fell through to "Me",
+          // or when the stored name is a raw phone / Matrix ID.
+          if (!looksLikeRealName(g.senderName) && looksLikeRealName(contactMsg.sender.name)) {
             g.senderName = contactMsg.sender.name;
           }
         }
