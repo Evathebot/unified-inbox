@@ -15,6 +15,27 @@ import {
 import { extractActionItems } from './ai';
 
 /**
+ * Parse Beeper's JSON-wrapped message format.
+ *
+ * Beeper stores all rich text as JSON: {"text":"content","textEntities":[...]}
+ * System events (tapbacks, renames) use a {{sender}} template:
+ *   {"text":"{{sender}} loved \"some message\"","textEntities":[...]}
+ *
+ * We extract the plain `text` field and substitute {{sender}} so the body
+ * stored / shown to the user is always a clean readable string.
+ */
+export function parseBeeperText(body: string, senderName: string = 'Someone'): string {
+  if (!body || !body.trim().startsWith('{')) return body;
+  try {
+    const parsed = JSON.parse(body);
+    if (typeof parsed?.text === 'string') {
+      return parsed.text.replace(/\{\{sender\}\}/g, senderName);
+    }
+  } catch { /* not valid JSON — return as-is */ }
+  return body;
+}
+
+/**
  * Transform database message to frontend Message type
  */
 // Infer topic from subject/body keywords
@@ -152,21 +173,25 @@ function transformMessage(dbMessage: any, conv?: { id: string; title: string; ty
     }
   }
 
+  const rawSenderName = formatContactName(
+    dbMessage.contact?.displayName || dbMessage.contact?.name || dbMessage.senderName
+  );
+  // Decode Beeper JSON-wrapped bodies ({"text":"...","textEntities":[...]})
+  const cleanBody = parseBeeperText(dbMessage.body, rawSenderName);
+
   return {
     id: dbMessage.id,
     channel: dbMessage.channel as any,
     channelContext,
     sender: {
-      name: formatContactName(dbMessage.contact?.displayName || dbMessage.contact?.name || dbMessage.senderName),
+      name: rawSenderName,
       avatar: dbMessage.contact?.avatar || '👤',
       online: false,
     },
     subject: dbMessage.subject || undefined,
     // preview: ≤150 chars for list rows; body: full text for detail view
-    preview: dbMessage.body.length > 150
-      ? dbMessage.body.substring(0, 150) + '…'
-      : dbMessage.body,
-    body: dbMessage.body,
+    preview: cleanBody.length > 150 ? cleanBody.substring(0, 150) + '…' : cleanBody,
+    body: cleanBody,
     externalId: conv?.externalId ?? undefined,
     timestamp: new Date(dbMessage.timestamp),
     priority: dbMessage.priority,

@@ -62,9 +62,11 @@ function groupByDay(messages: Message[]): Array<{ date: Date; messages: Message[
   return result;
 }
 
-/** Convert mxc://server/mediaId → proxied Matrix media URL (auth added server-side) */
+/** Convert mxc:// or localmxc:// → proxied Matrix media URL (auth added server-side) */
 function convertMxcUrl(mxc: string): string {
-  const withoutScheme = mxc.slice('mxc://'.length);
+  // localmxc:// is Beeper's local variant — same Matrix server structure as mxc://
+  const scheme = mxc.startsWith('localmxc://') ? 'localmxc://' : 'mxc://';
+  const withoutScheme = mxc.slice(scheme.length);
   const slashIdx = withoutScheme.indexOf('/');
   if (slashIdx === -1) return mxc;
   const server = withoutScheme.slice(0, slashIdx);
@@ -75,13 +77,14 @@ function convertMxcUrl(mxc: string): string {
 
 function isImageUrl(text: string): boolean {
   const trimmed = text.trim();
-  if (trimmed.startsWith('mxc://')) return true;
+  if (trimmed.startsWith('mxc://') || trimmed.startsWith('localmxc://')) return true;
   return /^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(trimmed);
 }
 
 function resolveImageSrc(text: string): string {
   const trimmed = text.trim();
-  return trimmed.startsWith('mxc://') ? convertMxcUrl(trimmed) : trimmed;
+  if (trimmed.startsWith('mxc://') || trimmed.startsWith('localmxc://')) return convertMxcUrl(trimmed);
+  return trimmed;
 }
 
 const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍'];

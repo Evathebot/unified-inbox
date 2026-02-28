@@ -9,9 +9,11 @@ interface GroupAvatarProps {
   channel?: string;
 }
 
-/** Convert mxc://server/mediaId → proxied thumbnail URL (auth added server-side) */
+/** Convert mxc:// or localmxc:// → proxied thumbnail URL (auth added server-side) */
 function convertMxcUrl(mxc: string): string {
-  const withoutScheme = mxc.slice('mxc://'.length);
+  // localmxc:// is Beeper's local variant — same Matrix server structure as mxc://
+  const scheme = mxc.startsWith('localmxc://') ? 'localmxc://' : 'mxc://';
+  const withoutScheme = mxc.slice(scheme.length);
   const slashIdx = withoutScheme.indexOf('/');
   if (slashIdx === -1) return '';
   const server = withoutScheme.slice(0, slashIdx);
@@ -22,8 +24,9 @@ function convertMxcUrl(mxc: string): string {
 
 function resolveImageSrc(src: string): string | null {
   if (!src) return null;
-  if (src.startsWith('mxc://')) return convertMxcUrl(src);
+  if (src.startsWith('mxc://') || src.startsWith('localmxc://')) return convertMxcUrl(src);
   if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('/')) return src;
+  // file:// paths are local to Beeper's host machine — not accessible; show initials instead
   return null;
 }
 

@@ -14,6 +14,7 @@
 import { PrismaClient } from '@prisma/client';
 import { BeeperService, BeeperChat, BeeperMessage, BeeperParticipant } from './beeper';
 import { ContactResolver } from './contact-resolver';
+import { parseBeeperText } from '@/lib/data';
 
 export interface SyncResult {
   accounts: number;
@@ -250,7 +251,10 @@ export class SyncEngine {
     // For image/file/audio/video messages, fall back to the first attachment URL so the
     // front-end can render the actual media instead of a "[image]" placeholder.
     const attachmentUrl = msg.attachments?.[0]?.srcURL ?? null;
-    const bodyValue = msg.text || attachmentUrl || `[${messageType}]`;
+    const displaySenderName = msg.isSender ? 'Me' : (msg.senderName || 'Unknown');
+    // Decode Beeper's JSON-wrapped text ({"text":"...","textEntities":[...]}) before storing
+    const rawText = msg.text ? parseBeeperText(msg.text, displaySenderName) : null;
+    const bodyValue = rawText || attachmentUrl || `[${messageType}]`;
 
     const message = await this.prisma.message.upsert({
       where: {
