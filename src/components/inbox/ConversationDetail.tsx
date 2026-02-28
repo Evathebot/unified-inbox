@@ -62,14 +62,15 @@ function groupByDay(messages: Message[]): Array<{ date: Date; messages: Message[
   return result;
 }
 
-/** Convert mxc://server/mediaId → Beeper Matrix media download URL */
+/** Convert mxc://server/mediaId → proxied Matrix media URL (auth added server-side) */
 function convertMxcUrl(mxc: string): string {
   const withoutScheme = mxc.slice('mxc://'.length);
   const slashIdx = withoutScheme.indexOf('/');
   if (slashIdx === -1) return mxc;
   const server = withoutScheme.slice(0, slashIdx);
   const mediaId = withoutScheme.slice(slashIdx + 1);
-  return `https://matrix.beeper.com/_matrix/media/v3/download/${server}/${mediaId}`;
+  const matrixUrl = `https://matrix.beeper.com/_matrix/media/v3/download/${server}/${mediaId}`;
+  return `/api/media/proxy?url=${encodeURIComponent(matrixUrl)}`;
 }
 
 function isImageUrl(text: string): boolean {
@@ -267,6 +268,7 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
   const [summaryDismissed, setSummaryDismissed] = useState(false);
   const [aiDraft, setAiDraft] = useState<string>('');
   const [draftLoading, setDraftLoading] = useState(true);
+  const [aiDraftDismissed, setAiDraftDismissed] = useState(false);
   const [reactions, setReactions] = useState<MessageReactions>({});
   const [forwardToast, setForwardToast] = useState<string | null>(null);
   const [selectedThread, setSelectedThread] = useState<Message | null>(null);
@@ -282,6 +284,7 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
     currentKeyRef.current = conversationKey;
     setLocalMessages([]);
     setSummaryDismissed(false);
+    setAiDraftDismissed(false);
     setReactions({});
     setSelectedThread(null);
 
@@ -790,14 +793,17 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
         )}
 
         {/* ── AI Reply Box ───────────────────────────────────── */}
-        <div className="px-4 pt-3 pb-1 bg-white border-t border-gray-100 shrink-0">
-          <AIReplyBox
-            suggestedReply={aiDraft}
-            loading={draftLoading}
-            onSend={handleSendDraft}
-            onRegenerate={handleRegenerateDraft}
-          />
-        </div>
+        {!aiDraftDismissed && (draftLoading || aiDraft) && (
+          <div className="px-4 pt-3 pb-1 bg-white border-t border-gray-100 shrink-0">
+            <AIReplyBox
+              suggestedReply={aiDraft}
+              loading={draftLoading}
+              onSend={handleSendDraft}
+              onRegenerate={handleRegenerateDraft}
+              onDismiss={() => setAiDraftDismissed(true)}
+            />
+          </div>
+        )}
 
         {/* ── Compose bar ───────────────────────────────────── */}
         <ReplyToolbar

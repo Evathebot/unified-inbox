@@ -32,14 +32,15 @@ const channelBadgeSizes = {
   xl:  { container: 'w-6 h-6',     logo: 14 },
 };
 
-/** Convert mxc://server/mediaId → Beeper Matrix media thumbnail URL */
+/** Convert mxc://server/mediaId → proxied thumbnail URL (auth added server-side) */
 function convertMxcUrl(mxc: string): string {
   const withoutScheme = mxc.slice('mxc://'.length);
   const slashIdx = withoutScheme.indexOf('/');
   if (slashIdx === -1) return '';
   const server = withoutScheme.slice(0, slashIdx);
   const mediaId = withoutScheme.slice(slashIdx + 1);
-  return `https://matrix.beeper.com/_matrix/media/v3/thumbnail/${server}/${mediaId}?width=96&height=96&method=crop`;
+  const matrixUrl = `https://matrix.beeper.com/_matrix/media/v3/thumbnail/${server}/${mediaId}?width=96&height=96&method=crop`;
+  return `/api/media/proxy?url=${encodeURIComponent(matrixUrl)}`;
 }
 
 function resolveImageSrc(src: string): string | null {

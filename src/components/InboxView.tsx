@@ -24,9 +24,9 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  // Poll for new messages every 30 seconds
+  // Poll for new messages every 10 seconds
   useEffect(() => {
-    const interval = setInterval(() => router.refresh(), 30_000);
+    const interval = setInterval(() => router.refresh(), 10_000);
     return () => clearInterval(interval);
   }, [router]);
 
@@ -76,9 +76,9 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
   const showMobileDetail = state.effectiveSelected || state.showCompose;
 
   return (
-    <div className="h-screen flex">
+    <div className="h-screen flex overflow-hidden">
       {/* Left panel — hidden on mobile when detail is open */}
-      <div className={`${showMobileDetail ? 'hidden lg:flex' : 'flex'} flex-col w-full lg:w-auto`}>
+      <div className={`${showMobileDetail ? 'hidden lg:flex' : 'flex'} flex-col w-full lg:w-auto overflow-hidden`}>
         <ConversationList
           groups={state.conversationGroups}
           selectedGroup={state.effectiveSelected}
@@ -107,7 +107,7 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
       </div>
 
       {/* Right panel — full screen on mobile when open, hidden when no selection on desktop */}
-      <div className={`${showMobileDetail ? 'flex' : 'hidden lg:flex'} flex-1 flex-col bg-gray-50`}>
+      <div className={`${showMobileDetail ? 'flex' : 'hidden lg:flex'} flex-1 flex-col bg-gray-50 overflow-hidden`}>
         {/* Mobile back button */}
         <div className="lg:hidden flex items-center px-4 py-3 border-b border-gray-200 bg-white">
           <button

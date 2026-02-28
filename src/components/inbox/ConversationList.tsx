@@ -62,7 +62,7 @@ export default function ConversationList({
   unreadCount, activeCount, greeting, userName, onCompose,
 }: ConversationListProps) {
   return (
-    <div className="w-full md:w-96 lg:w-[380px] border-r border-gray-200 flex flex-col bg-white relative">
+    <div className="h-full w-full md:w-96 lg:w-[380px] border-r border-gray-200 flex flex-col bg-white relative">
       {/* Header */}
       <div className="px-4 pt-4 pb-3 border-b border-gray-100">
         <div className="flex items-center justify-between">

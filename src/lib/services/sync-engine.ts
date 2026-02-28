@@ -247,6 +247,11 @@ export class SyncEngine {
     else if (msg.type === 'AUDIO') messageType = 'voice';
     else if (msg.type === 'VIDEO') messageType = 'video';
 
+    // For image/file/audio/video messages, fall back to the first attachment URL so the
+    // front-end can render the actual media instead of a "[image]" placeholder.
+    const attachmentUrl = msg.attachments?.[0]?.srcURL ?? null;
+    const bodyValue = msg.text || attachmentUrl || `[${messageType}]`;
+
     const message = await this.prisma.message.upsert({
       where: {
         workspaceId_externalId: {
@@ -262,14 +267,16 @@ export class SyncEngine {
         senderId: msg.senderID,
         senderName: msg.isSender ? 'Me' : msg.senderName,
         senderContactId,
-        body: msg.text || `[${messageType}]`,
+        body: bodyValue,
         timestamp: new Date(msg.timestamp),
         read: msg.isSender, // own messages are "read"
         messageType,
         metadata: msg.attachments ? JSON.stringify({ attachments: msg.attachments }) : undefined,
       },
       update: {
-        body: msg.text || `[${messageType}]`,
+        body: bodyValue,
+        // Fix senderName on re-sync so old phone-number entries get corrected to 'Me' or real name
+        senderName: msg.isSender ? 'Me' : msg.senderName,
         senderContactId,
       },
     });

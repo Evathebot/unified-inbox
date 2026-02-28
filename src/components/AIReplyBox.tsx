@@ -1,17 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Send, Check, Pencil, Eye, RefreshCw } from 'lucide-react';
+import { Send, Check, Pencil, Eye, RefreshCw, X } from 'lucide-react';
 
 interface AIReplyBoxProps {
   suggestedReply: string;
   onSend: (text: string) => void;
   onRegenerate?: () => void;
+  onDismiss?: () => void;
   /** Pass true while the AI draft is still being fetched from the server */
   loading?: boolean;
 }
 
-export default function AIReplyBox({ suggestedReply, onSend, onRegenerate, loading = false }: AIReplyBoxProps) {
+export default function AIReplyBox({ suggestedReply, onSend, onRegenerate, onDismiss, loading = false }: AIReplyBoxProps) {
   const [reply, setReply] = useState(suggestedReply);
   const [isEditing, setIsEditing] = useState(false);
   const [sent, setSent] = useState(false);
@@ -52,16 +53,27 @@ export default function AIReplyBox({ suggestedReply, onSend, onRegenerate, loadi
             <span className="ai-text-gradient text-sm font-semibold">AI Suggested Reply</span>
           )}
         </div>
-        {!loading && onRegenerate && (
-          <button
-            onClick={onRegenerate}
-            className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
-            title="Regenerate draft"
-          >
-            <RefreshCw size={11} />
-            <span>Regenerate</span>
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {!loading && onRegenerate && (
+            <button
+              onClick={onRegenerate}
+              className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              title="Regenerate draft"
+            >
+              <RefreshCw size={11} />
+              <span>Regenerate</span>
+            </button>
+          )}
+          {onDismiss && (
+            <button
+              onClick={onDismiss}
+              className="w-5 h-5 flex items-center justify-center text-gray-300 hover:text-gray-500 transition-colors rounded"
+              title="Dismiss AI draft"
+            >
+              <X size={13} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Reply content */}
