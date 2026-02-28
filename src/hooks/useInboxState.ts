@@ -187,10 +187,7 @@ export function useInboxState(initialMessages: Message[]) {
 
   const handleArchive = (group: ConversationGroup) => {
     setArchivedGroups(prev => new Set([...prev, group._groupKey]));
-    if (
-      selectedGroup?.senderName === group.senderName &&
-      selectedGroup?.channel === group.channel
-    ) {
+    if (selectedGroup?._groupKey === group._groupKey) {
       setSelectedGroup(null);
     }
   };

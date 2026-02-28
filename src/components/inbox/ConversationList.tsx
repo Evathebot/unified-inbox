@@ -141,9 +141,7 @@ export default function ConversationList({
         {groups.map((group) => {
           const latest = group.messages[group.messages.length - 1];
           const isUnread = group.unreadCount > 0;
-          const isSelected =
-            selectedGroup?.senderName === group.senderName &&
-            selectedGroup?.channel === group.channel;
+          const isSelected = selectedGroup?._groupKey === group._groupKey;
 
           const isPriority = group.highestPriority >= 70;
           const priorityBorderColor = group.highestPriority >= 80 ? 'border-l-red-500' : 'border-l-orange-400';

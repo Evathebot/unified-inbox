@@ -375,6 +375,24 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
     }
   }, [localMessages]);
 
+  // De-duplicate: when the server returns a message we sent optimistically,
+  // drop it from localMessages so it doesn't appear twice.
+  useEffect(() => {
+    if (localMessages.length === 0) return;
+    // Build a set of recent "Me" message bodies already confirmed by the server
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    const confirmedBodies = new Set(
+      group.messages
+        .filter(m => m.sender.name === 'Me' && m.timestamp.getTime() >= fiveMinutesAgo)
+        .map(m => (m.body ?? m.preview).trim()),
+    );
+    if (confirmedBodies.size === 0) return;
+    setLocalMessages(prev =>
+      prev.filter(lm => !confirmedBodies.has((lm.body ?? lm.preview).trim())),
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [group.messages]);
+
   const handleRegenerateDraft = () => {
     setAiDraft('');
     setDraftLoading(true);

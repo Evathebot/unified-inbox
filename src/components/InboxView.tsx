@@ -24,11 +24,24 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  // Poll for new messages every 10 seconds
+  // Poll the DB every 10 seconds and re-render with fresh data
   useEffect(() => {
     const interval = setInterval(() => router.refresh(), 10_000);
     return () => clearInterval(interval);
   }, [router]);
+
+  // Pull new messages from Beeper Desktop → DB every 30 seconds.
+  // Uses server-fetch mode locally (server calls localhost:23373 directly).
+  // After each sync the next router.refresh() above picks up the new rows.
+  useEffect(() => {
+    const sync = () => {
+      fetch('/api/sync', { method: 'POST' }).catch(() => {});
+    };
+    // Run once immediately so messages are fresh on first load, then repeat
+    sync();
+    const interval = setInterval(sync, 30_000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -46,9 +59,7 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
       } = stateRef.current;
 
       const currentIdx = conversationGroups.findIndex(
-        g =>
-          g.senderName === effectiveSelected?.senderName &&
-          g.channel === effectiveSelected?.channel
+        g => g._groupKey === effectiveSelected?._groupKey,
       );
 
       if (e.key === 'j') {
