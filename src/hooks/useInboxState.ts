@@ -151,13 +151,21 @@ export function useInboxState(initialMessages: Message[]) {
 
     groups.forEach(g => g.messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()));
 
-    // Second pass: for DM conversations where the seed message was from "Me",
-    // find the contact's real avatar from any non-"Me" message in the group.
+    // Second pass: for DM conversations where the seed message was from "Me"
+    // (or conv.title was null), fix both the display name and avatar by looking
+    // for the first message sent by the other person in the group.
     groups.forEach(g => {
       if (!g.isGroupConversation) {
         const contactMsg = g.messages.find(m => m.sender.name !== 'Me');
-        if (contactMsg && (!g.senderAvatar || g.senderAvatar === '👤')) {
-          g.senderAvatar = contactMsg.sender.avatar;
+        if (contactMsg) {
+          // Fix avatar when missing or placeholder
+          if (!g.senderAvatar || g.senderAvatar === '👤') {
+            g.senderAvatar = contactMsg.sender.avatar;
+          }
+          // Fix name when conv.title was null and we fell through to "Me"
+          if (!g.senderName || g.senderName === 'Me') {
+            g.senderName = contactMsg.sender.name;
+          }
         }
       }
     });
@@ -175,7 +183,13 @@ export function useInboxState(initialMessages: Message[]) {
   // Show conversation count (not message count) in the inbox header
   const activeCount = conversationGroups.length;
 
-  const effectiveSelected = selectedGroup || conversationGroups[0] || null;
+  // Always resolve against the freshly-computed groups so that when
+  // router.refresh() brings in new messages, ConversationDetail re-renders
+  // with the updated group (including the new messages) instead of the
+  // stale snapshot that was stored in selectedGroup state.
+  const effectiveSelected = selectedGroup
+    ? conversationGroups.find(g => g._groupKey === selectedGroup._groupKey) ?? conversationGroups[0] ?? null
+    : conversationGroups[0] ?? null;
 
   const handleSelectGroup = (group: ConversationGroup) => {
     setSelectedGroup(group);

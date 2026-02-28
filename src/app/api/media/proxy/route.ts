@@ -40,11 +40,9 @@ export async function GET(request: Request) {
     });
 
     if (!connection?.accessToken) {
-      // No token — return a transparent 1×1 gif so the UI shows the initials fallback
-      return new Response(
-        Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64'),
-        { status: 200, headers: { 'Content-Type': 'image/gif' } }
-      );
+      // No token — return 404 so the <img> onError fires and Avatar shows initials.
+      // (Returning a transparent GIF would be a 200, which onError never catches.)
+      return new Response('No Beeper token', { status: 404 });
     }
 
     const response = await fetch(url, {
@@ -54,11 +52,8 @@ export async function GET(request: Request) {
     });
 
     if (!response.ok) {
-      // Return transparent gif on upstream error so the Avatar falls back to initials
-      return new Response(
-        Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64'),
-        { status: 200, headers: { 'Content-Type': 'image/gif' } }
-      );
+      // Propagate upstream errors so <img> onError fires and Avatar shows initials
+      return new Response('Media fetch failed', { status: response.status === 401 ? 401 : 502 });
     }
 
     const buffer = await response.arrayBuffer();
@@ -76,10 +71,7 @@ export async function GET(request: Request) {
     if (error instanceof AuthError) {
       return new Response('Not authenticated', { status: 401 });
     }
-    // Return transparent gif on any error
-    return new Response(
-      Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64'),
-      { status: 200, headers: { 'Content-Type': 'image/gif' } }
-    );
+    // Return 502 on any unexpected error so <img> onError fires → Avatar shows initials
+    return new Response('Proxy error', { status: 502 });
   }
 }
