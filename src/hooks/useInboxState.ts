@@ -120,7 +120,11 @@ export function useInboxState(initialMessages: Message[]) {
       } else {
         const isGroup = msg.isGroupConversation ?? false;
         groupMap.set(key, {
-          senderName: isGroup ? (msg.conversationTitle || msg.sender.name) : msg.sender.name,
+          // Always use conversationTitle when available — it holds the contact's
+          // real name for DMs (e.g. "Zach", "Emily") and the group name for group
+          // convos. This prevents "Me" from showing as the conversation name when
+          // the user's message happened to be the most-recently-fetched one.
+          senderName: msg.conversationTitle || msg.sender.name,
           senderAvatar: isGroup ? '' : msg.sender.avatar,
           senderOnline: isGroup ? false : msg.sender.online,
           channel: msg.channel,
@@ -146,6 +150,17 @@ export function useInboxState(initialMessages: Message[]) {
       .filter(g => !archivedGroups.has(g._groupKey));
 
     groups.forEach(g => g.messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()));
+
+    // Second pass: for DM conversations where the seed message was from "Me",
+    // find the contact's real avatar from any non-"Me" message in the group.
+    groups.forEach(g => {
+      if (!g.isGroupConversation) {
+        const contactMsg = g.messages.find(m => m.sender.name !== 'Me');
+        if (contactMsg && (!g.senderAvatar || g.senderAvatar === '👤')) {
+          g.senderAvatar = contactMsg.sender.avatar;
+        }
+      }
+    });
 
     if (sortBy === 'priority') {
       groups.sort((a, b) => b.highestPriority - a.highestPriority);
