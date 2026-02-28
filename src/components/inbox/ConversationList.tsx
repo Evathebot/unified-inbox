@@ -240,7 +240,7 @@ export default function ConversationList({
                     )}
                     <p className={`text-xs line-clamp-1 ${isUnread ? 'text-gray-600' : 'text-gray-400'}`}>
                       {group.isGroupConversation
-                        ? <><span className={`font-medium ${isUnread ? 'text-gray-700' : 'text-gray-500'}`}>{latest.sender.name}:</span>{' '}{latest.subject || latest.preview}</>
+                        ? <><span className={`font-medium ${isUnread ? 'text-gray-700' : 'text-gray-500'}`}>{latest.sender.name === 'Me' ? 'You' : latest.sender.name}:</span>{' '}{latest.subject || latest.preview}</>
                         : (latest.subject || latest.preview)
                       }
                     </p>
