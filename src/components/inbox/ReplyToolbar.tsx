@@ -14,7 +14,7 @@ interface ReplyToolbarProps {
   onMessageSent?: (text: string) => void;
 }
 
-type SendState = 'idle' | 'sending' | 'sent' | 'error' | 'not_connected';
+type SendState = 'idle' | 'sending' | 'sent' | 'error' | 'not_connected' | 'voice_unsupported';
 
 const EMOJI_LIST = [
   '😀','😂','🥰','😎','🤔','😅','🙌','👏','🔥','❤️',
@@ -28,26 +28,30 @@ function formatAudioTime(seconds: number): string {
   return `${m}:${s}`;
 }
 
-/** Cache the Beeper token in memory so we don't refetch on every send. */
-let cachedBeeperToken: { apiUrl: string; accessToken: string } | null = null;
-let tokenFetchedAt = 0;
-const TOKEN_TTL_MS = 5 * 60 * 1000; // 5 minutes
+/**
+ * Send a message via the server-side Beeper proxy.
+ * Returns true on success, false if Beeper isn't reachable/connected.
+ * Throws on unexpected errors (non-503/non-404).
+ */
+async function sendViaBeeperProxy(chatId: string, text: string): Promise<boolean> {
+  const res = await fetch('/api/beeper/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chatId, text }),
+    signal: AbortSignal.timeout(12_000),
+  });
 
-async function getBeeperToken(): Promise<{ apiUrl: string; accessToken: string } | null> {
-  if (cachedBeeperToken && Date.now() - tokenFetchedAt < TOKEN_TTL_MS) {
-    return cachedBeeperToken;
+  if (res.status === 503 || res.status === 404) {
+    // Beeper Desktop not running or not connected
+    return false;
   }
-  try {
-    const res = await fetch('/api/beeper/token');
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data.apiUrl && data.accessToken) {
-      cachedBeeperToken = { apiUrl: data.apiUrl, accessToken: data.accessToken };
-      tokenFetchedAt = Date.now();
-      return cachedBeeperToken;
-    }
-  } catch { /* ignore */ }
-  return null;
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Server returned ${res.status}`);
+  }
+
+  return true;
 }
 
 export default function ReplyToolbar({
@@ -141,25 +145,28 @@ export default function ReplyToolbar({
     setAudioSeconds(0);
   };
 
-  // Voice send: show a placeholder message (actual audio upload to Beeper not yet supported)
+  // Voice send: audio upload to Beeper is not yet supported.
   const sendAudio = () => {
     if (!audioBlobUrl) return;
-    onMessageSent?.('[🎙️ Voice message]');
     setAudioBlobUrl(null);
     setAudioSeconds(0);
-    setSendState('sent');
-    setTimeout(() => setSendState('idle'), 2500);
+    setSendState('voice_unsupported');
+    setTimeout(() => setSendState('idle'), 3500);
   };
 
   /**
    * Primary send handler.
    *
-   * When we have a Beeper externalId, we send directly from the browser to
-   * Beeper Desktop (localhost:23373) — the server can't do this in production.
-   * On success we POST to /api/conversations/send to persist the message to DB.
+   * When we have a Beeper externalId, we route the send through our own
+   * server-side proxy (/api/beeper/send) which calls Beeper Desktop on
+   * localhost:23373.  Using the server avoids the CORS restriction that
+   * blocks direct browser → localhost:23373 requests.
    *
-   * Fallback: if no externalId (e.g., non-Beeper conversation), we post to the
-   * server which returns guidance on how to proceed.
+   * On success we also POST to /api/conversations/send to persist the
+   * message to our DB.
+   *
+   * Fallback: if no externalId (e.g., non-Beeper conversation), we post to
+   * /api/conversations/send which handles demo / non-Beeper paths.
    */
   const handleSend = useCallback(async () => {
     const text = replyText.trim();
@@ -169,48 +176,24 @@ export default function ReplyToolbar({
     setReplyText('');
 
     try {
-      // ── Path 1: Browser-side send via Beeper Desktop ──────────────────
+      // ── Path 1: Server-proxied send via Beeper Desktop ────────────────
       if (externalId) {
-        const token = await getBeeperToken();
+        const delivered = await sendViaBeeperProxy(externalId, text);
 
-        if (!token) {
-          // No Beeper connection
+        if (!delivered) {
+          // Beeper Desktop not reachable / not connected
           setSendState('not_connected');
           setReplyText(text);
           setTimeout(() => setSendState('idle'), 4000);
           return;
         }
 
-        const encodedChatId = encodeURIComponent(externalId);
-        const beeperRes = await fetch(`${token.apiUrl}/v1/chats/${encodedChatId}/messages`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token.accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ text }),
-          signal: AbortSignal.timeout(10000),
-        });
-
-        if (!beeperRes.ok) {
-          const errText = await beeperRes.text().catch(() => '');
-          console.error('[Send] Beeper send failed:', beeperRes.status, errText);
-          throw new Error(`Beeper returned ${beeperRes.status}`);
-        }
-
-        const sentMsg = await beeperRes.json().catch(() => null);
-
         // Persist to DB (best-effort — message was already delivered)
         if (conversationId) {
           fetch('/api/conversations/send', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              conversationId,
-              text,
-              channel,
-              externalMessageId: sentMsg?.id,
-            }),
+            body: JSON.stringify({ conversationId, text, channel }),
           }).catch(() => {});
         }
 
@@ -281,6 +264,16 @@ export default function ReplyToolbar({
     );
   }
 
+  if (sendState === 'voice_unsupported') {
+    return (
+      <div className="bg-white border-t border-gray-200">
+        <div className="flex items-center justify-center gap-2 py-4 text-amber-600 text-sm">
+          🎙️ Voice messages aren&apos;t supported yet — send a text instead
+        </div>
+      </div>
+    );
+  }
+
   if (sendState === 'not_connected') {
     return (
       <div className="bg-white border-t border-gray-200">
@@ -296,6 +289,7 @@ export default function ReplyToolbar({
   }
 
   const isSending = sendState === 'sending';
+  // (voice_unsupported is handled above as its own full render, so we never reach here in that state)
 
   // ── Audio recording UI ───────────────────────────────────
   if (isRecording || audioBlobUrl) {

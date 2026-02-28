@@ -64,20 +64,27 @@ function groupByDay(messages: Message[]): Array<{ date: Date; messages: Message[
 
 /** Convert mxc:// or localmxc:// → proxied Matrix media URL (auth added server-side) */
 function convertMxcUrl(mxc: string): string {
-  // localmxc:// is Beeper's local variant — same Matrix server structure as mxc://
   const scheme = mxc.startsWith('localmxc://') ? 'localmxc://' : 'mxc://';
   const withoutScheme = mxc.slice(scheme.length);
   const slashIdx = withoutScheme.indexOf('/');
-  if (slashIdx === -1) return mxc;
+  if (slashIdx === -1) return '';
   const server = withoutScheme.slice(0, slashIdx);
   const mediaId = withoutScheme.slice(slashIdx + 1);
+  // Local Beeper bridge media (localmxc://local-*) is not publicly accessible
+  if (server.startsWith('local-')) return '';
   const matrixUrl = `https://matrix.beeper.com/_matrix/media/v3/download/${server}/${mediaId}`;
   return `/api/media/proxy?url=${encodeURIComponent(matrixUrl)}`;
 }
 
 function isImageUrl(text: string): boolean {
   const trimmed = text.trim();
-  if (trimmed.startsWith('mxc://') || trimmed.startsWith('localmxc://')) return true;
+  if (trimmed.startsWith('mxc://') || trimmed.startsWith('localmxc://')) {
+    // Only treat as image if it's not a local bridge URL (those can't load)
+    const withoutScheme = trimmed.startsWith('localmxc://') ? trimmed.slice('localmxc://'.length) : trimmed.slice('mxc://'.length);
+    const server = withoutScheme.split('/')[0];
+    if (server.startsWith('local-')) return false;
+    return true;
+  }
   return /^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(trimmed);
 }
 
@@ -547,6 +554,18 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
                   const isImage = isImageUrl(msgBody);
                   const threadCount = msg.thread?.messages?.length ?? 0;
                   const isThreadOpen = selectedThread?.id === msg.id;
+
+                  // ── System event (tapback / rename / group change) ─
+                  // Render as a small centered gray pill — no chat bubble.
+                  if (msg.isSystemEvent) {
+                    return (
+                      <div key={msgId} className="flex items-center justify-center py-1">
+                        <span className="text-[11px] text-gray-400 italic px-3 py-0.5 bg-gray-100/80 rounded-full max-w-[80%] text-center leading-relaxed">
+                          {msgBody}
+                        </span>
+                      </div>
+                    );
+                  }
 
                   // ── Slack-style layout ─────────────────────────────
                   if (group.channel === 'slack') {

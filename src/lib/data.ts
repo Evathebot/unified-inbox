@@ -23,6 +23,9 @@ import { extractActionItems } from './ai';
  *
  * We extract the plain `text` field and substitute {{sender}} so the body
  * stored / shown to the user is always a clean readable string.
+ *
+ * Returns { text, isSystemEvent } — isSystemEvent is true when the original
+ * JSON used a {{sender}} template (tapback, rename, group-photo change, etc.)
  */
 export function parseBeeperText(body: string, senderName: string = 'Someone'): string {
   if (!body || !body.trim().startsWith('{')) return body;
@@ -33,6 +36,21 @@ export function parseBeeperText(body: string, senderName: string = 'Someone'): s
     }
   } catch { /* not valid JSON — return as-is */ }
   return body;
+}
+
+/**
+ * Detect Beeper system event messages (tapbacks, renames, group changes).
+ *
+ * Two sources:
+ *  1. Raw DB body still contains {{sender}} template (not yet decoded).
+ *  2. Already-decoded bodies that match known system-event verb patterns.
+ */
+const SYSTEM_EVENT_RE =
+  /^.{0,60}?\s+(loved|liked|emphasized|reacted to|laughed at|questioned|disliked|named the conversation|changed the group|left the room|joined the room)\b/i;
+
+export function isBeeperSystemEvent(rawBody: string, decodedBody: string): boolean {
+  if (rawBody?.includes('{{sender}}')) return true;
+  return SYSTEM_EVENT_RE.test(decodedBody);
 }
 
 /**
@@ -178,6 +196,7 @@ function transformMessage(dbMessage: any, conv?: { id: string; title: string; ty
   );
   // Decode Beeper JSON-wrapped bodies ({"text":"...","textEntities":[...]})
   const cleanBody = parseBeeperText(dbMessage.body, rawSenderName);
+  const isSystemEvent = isBeeperSystemEvent(dbMessage.body ?? '', cleanBody);
 
   return {
     id: dbMessage.id,
@@ -222,6 +241,7 @@ function transformMessage(dbMessage: any, conv?: { id: string; title: string; ty
     conversationId: conv?.id ?? dbMessage.conversationId,
     conversationTitle: conv?.title,
     isGroupConversation: (conv?.type ?? dbMessage.conversation?.type) === 'group',
+    isSystemEvent,
   };
 }
 

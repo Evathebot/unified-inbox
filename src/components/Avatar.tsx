@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import PlatformLogo from './PlatformLogo';
 
 interface AvatarProps {
@@ -41,15 +42,21 @@ function convertMxcUrl(mxc: string): string {
   if (slashIdx === -1) return '';
   const server = withoutScheme.slice(0, slashIdx);
   const mediaId = withoutScheme.slice(slashIdx + 1);
+  // Local Beeper bridge media (localmxc://local-*) can't be served via the public
+  // Matrix API, so skip the proxy and let the caller fall through to initials.
+  if (server.startsWith('local-')) return '';
   const matrixUrl = `https://matrix.beeper.com/_matrix/media/v3/thumbnail/${server}/${mediaId}?width=96&height=96&method=crop`;
   return `/api/media/proxy?url=${encodeURIComponent(matrixUrl)}`;
 }
 
 function resolveImageSrc(src: string): string | null {
   if (!src) return null;
-  if (src.startsWith('mxc://') || src.startsWith('localmxc://')) return convertMxcUrl(src);
+  if (src.startsWith('mxc://') || src.startsWith('localmxc://')) {
+    const url = convertMxcUrl(src);
+    return url || null; // empty string → local bridge media → show initials
+  }
   if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('/')) return src;
-  // file:// paths are local to Beeper's host machine — not accessible; show initials instead
+  // file:// paths and emoji/plain strings — not a loadable URL; show initials
   return null;
 }
 
@@ -57,8 +64,13 @@ function isEmoji(str: string) {
   return [...str].length <= 2 && str.length <= 4;
 }
 
-function getInitials(name: string) {
-  return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+/** Generate up to 2 letter initials from a name, handling phone numbers gracefully */
+function getInitials(name: string): string {
+  if (!name) return '?';
+  // Phone numbers — show generic icon char
+  if (/^[\+\d]/.test(name) && /^[\+\d\s\-\(\)\.]+$/.test(name)) return '#';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).map(n => n[0]).join('').toUpperCase() || '?';
 }
 
 /**
@@ -82,27 +94,29 @@ function getInitials(name: string) {
  */
 export default function Avatar({ src, name, size = 'md', online, channel }: AvatarProps) {
   const imageSrc = resolveImageSrc(src);
+  const [imgError, setImgError] = useState(false);
   const badgeSize = channelBadgeSizes[size];
+
+  const showImage = !!imageSrc && !imgError;
+  const fallbackChar = isEmoji(src) ? src : getInitials(name);
 
   return (
     <div className="relative shrink-0">
-      {imageSrc ? (
+      {showImage && (
         <img
           src={imageSrc}
           alt={name}
           className={`${sizeClasses[size]} rounded-full object-cover bg-gray-200`}
-          onError={(e) => {
-            // Fall back to initials on load error
-            (e.currentTarget as HTMLImageElement).style.display = 'none';
-            (e.currentTarget.nextSibling as HTMLElement | null)?.style?.setProperty('display', 'flex');
-          }}
+          onError={() => setImgError(true)}
         />
-      ) : null}
-      <div
-        className={`${sizeClasses[size]} rounded-full bg-gray-200 flex items-center justify-center text-gray-600 ${imageSrc ? 'hidden' : ''}`}
-      >
-        {isEmoji(src) ? src : getInitials(name)}
-      </div>
+      )}
+      {!showImage && (
+        <div
+          className={`${sizeClasses[size]} rounded-full bg-gray-300 flex items-center justify-center text-gray-700 font-semibold select-none`}
+        >
+          {fallbackChar}
+        </div>
+      )}
 
       {/* Online dot — top-right when channel badge is present, bottom-right otherwise */}
       {online && !channel && (

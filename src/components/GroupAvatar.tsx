@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import PlatformLogo from './PlatformLogo';
 
 interface GroupAvatarProps {
@@ -11,22 +12,25 @@ interface GroupAvatarProps {
 
 /** Convert mxc:// or localmxc:// → proxied thumbnail URL (auth added server-side) */
 function convertMxcUrl(mxc: string): string {
-  // localmxc:// is Beeper's local variant — same Matrix server structure as mxc://
   const scheme = mxc.startsWith('localmxc://') ? 'localmxc://' : 'mxc://';
   const withoutScheme = mxc.slice(scheme.length);
   const slashIdx = withoutScheme.indexOf('/');
   if (slashIdx === -1) return '';
   const server = withoutScheme.slice(0, slashIdx);
   const mediaId = withoutScheme.slice(slashIdx + 1);
+  // Local Beeper bridge media can't be fetched via the public Matrix API — skip.
+  if (server.startsWith('local-')) return '';
   const matrixUrl = `https://matrix.beeper.com/_matrix/media/v3/thumbnail/${server}/${mediaId}?width=48&height=48&method=crop`;
   return `/api/media/proxy?url=${encodeURIComponent(matrixUrl)}`;
 }
 
 function resolveImageSrc(src: string): string | null {
   if (!src) return null;
-  if (src.startsWith('mxc://') || src.startsWith('localmxc://')) return convertMxcUrl(src);
+  if (src.startsWith('mxc://') || src.startsWith('localmxc://')) {
+    const url = convertMxcUrl(src);
+    return url || null;
+  }
   if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('/')) return src;
-  // file:// paths are local to Beeper's host machine — not accessible; show initials instead
   return null;
 }
 
@@ -34,8 +38,11 @@ function isEmoji(str: string) {
   return [...str].length <= 2 && str.length <= 4;
 }
 
-function getInitials(name: string) {
-  return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+function getInitials(name: string): string {
+  if (!name) return '?';
+  if (/^[\+\d]/.test(name) && /^[\+\d\s\-\(\)\.]+$/.test(name)) return '#';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).map(n => n[0]).join('').toUpperCase() || '?';
 }
 
 const containerSizes = {
@@ -57,22 +64,20 @@ interface MiniAvatarProps {
 
 function MiniAvatar({ src, name }: MiniAvatarProps) {
   const imageSrc = resolveImageSrc(src);
+  const [imgError, setImgError] = useState(false);
+  const showImage = !!imageSrc && !imgError;
   return (
-    <div className="w-full h-full bg-gray-200 flex items-center justify-center text-[9px] font-semibold text-gray-600 overflow-hidden">
-      {imageSrc ? (
+    <div className="w-full h-full bg-gray-300 flex items-center justify-center text-[9px] font-semibold text-gray-700 overflow-hidden">
+      {showImage ? (
         <img
           src={imageSrc}
           alt={name}
           className="w-full h-full object-cover"
-          onError={(e) => {
-            (e.currentTarget as HTMLImageElement).style.display = 'none';
-            (e.currentTarget.nextSibling as HTMLElement | null)?.style?.setProperty('display', 'flex');
-          }}
+          onError={() => setImgError(true)}
         />
-      ) : null}
-      <span className={imageSrc ? 'hidden' : ''}>
-        {isEmoji(src) ? src : getInitials(name)}
-      </span>
+      ) : (
+        <span>{isEmoji(src) ? src : getInitials(name)}</span>
+      )}
     </div>
   );
 }

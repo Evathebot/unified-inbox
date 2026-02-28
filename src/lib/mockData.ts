@@ -40,6 +40,8 @@ export interface Message {
   conversationId?: string;
   conversationTitle?: string;
   isGroupConversation?: boolean;
+  /** Beeper system events: tapbacks, renames, group-photo changes, etc. */
+  isSystemEvent?: boolean;
 }
 
 export interface Contact {
