@@ -4,6 +4,10 @@ import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
 
+// Ensure the layout (and all nested routes) are always server-rendered
+// fresh so DB data is never served from a stale build-time cache.
+export const dynamic = 'force-dynamic';
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],

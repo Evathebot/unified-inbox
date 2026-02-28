@@ -5,6 +5,8 @@ import CalendarEventCard from '@/components/CalendarEvent';
 import BriefingAISummary from '@/components/BriefingAISummary';
 import { getBriefing } from '@/lib/data';
 
+export const dynamic = 'force-dynamic';
+
 export default async function BriefingPage() {
   const briefing = await getBriefing();
 
