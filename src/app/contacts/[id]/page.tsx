@@ -87,6 +87,7 @@ export default async function ContactProfilePage({ params }: ContactProfilePageP
             <ContactAISummary
               contactId={contact.id}
               existingPersonality={contact.personality}
+              messageCount={contactMessages.length}
             />
           </div>
         </GlassCard>
