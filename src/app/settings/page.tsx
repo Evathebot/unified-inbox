@@ -66,6 +66,8 @@ function SettingsContent() {
   const [beeperStatus, setBeeperStatus] = useState<BeeperStatus>('idle');
   const [beeperError, setBeeperError] = useState('');
   const [syncStats, setSyncStats] = useState<{ conversations?: number; messages?: number; contacts?: number }>({});
+  const [beeperApiUrl, setBeeperApiUrl] = useState('http://localhost:23373');
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // ── Channel statuses (from DB) ─────────────────────────────
   const [channels, setChannels] = useState<ChannelStatus[]>(
@@ -156,18 +158,72 @@ function SettingsContent() {
   const handleConnectBeeper = async () => {
     setBeeperStatus('connecting');
     setBeeperError('');
+
     try {
-      const res = await fetch('/api/beeper/connect');
-      const data = await res.json();
-      if (data.authUrl) {
-        // Redirect browser to Beeper Desktop's OAuth consent page
-        window.location.href = data.authUrl;
-      } else {
-        setBeeperError(data.error || 'Could not reach Beeper Desktop. Is it running?');
+      // 1. Ask server to generate PKCE state + code challenge (no localhost call)
+      const initRes = await fetch('/api/beeper/connect');
+      const initData = await initRes.json();
+      if (!initData.state) {
+        setBeeperError(initData.error || 'Failed to initialise connection');
         setBeeperStatus('connect-error');
+        return;
       }
+      const { state, codeVerifier, codeChallenge, redirectUri } = initData;
+
+      // 2. Register OAuth client with Beeper Desktop — browser → localhost:23373
+      //    (This works because the browser and Beeper Desktop are on the same Mac)
+      let clientId: string;
+      try {
+        const regRes = await fetch(`${beeperApiUrl}/oauth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_name: 'Unified Inbox',
+            redirect_uris: [redirectUri],
+            grant_types: ['authorization_code'],
+            response_types: ['code'],
+            scope: 'read write',
+          }),
+        });
+        if (!regRes.ok) throw new Error('Registration response not OK');
+        const reg = await regRes.json();
+        clientId = reg.client_id as string;
+      } catch {
+        setBeeperError(
+          `Cannot reach Beeper Desktop at ${beeperApiUrl}. ` +
+          'Make sure Beeper Desktop is running on this Mac.'
+        );
+        setBeeperStatus('connect-error');
+        return;
+      }
+
+      // 3. Save clientId to server so the callback can use it if needed
+      await fetch('/api/beeper/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId, apiUrl: beeperApiUrl }),
+      });
+
+      // 4. Stash OAuth params in sessionStorage for the /beeper/callback page
+      sessionStorage.setItem('beeper_oauth', JSON.stringify({
+        codeVerifier,
+        clientId,
+        apiUrl: beeperApiUrl,
+        redirectUri,
+      }));
+
+      // 5. Redirect browser to Beeper Desktop's consent page
+      const authUrl = new URL(`${beeperApiUrl}/oauth/authorize`);
+      authUrl.searchParams.set('client_id', clientId);
+      authUrl.searchParams.set('redirect_uri', redirectUri);
+      authUrl.searchParams.set('response_type', 'code');
+      authUrl.searchParams.set('scope', 'read write');
+      authUrl.searchParams.set('state', state);
+      authUrl.searchParams.set('code_challenge', codeChallenge);
+      authUrl.searchParams.set('code_challenge_method', 'S256');
+      window.location.href = authUrl.toString();
     } catch {
-      setBeeperError('Could not reach Beeper Desktop. Make sure it is running.');
+      setBeeperError('Connection failed. Make sure Beeper Desktop is running on this Mac.');
       setBeeperStatus('connect-error');
     }
   };
@@ -305,9 +361,36 @@ function SettingsContent() {
             /* ── Not connected state ── */
             <div>
               <p className="text-sm text-gray-500 mb-4 leading-relaxed">
-                Beeper Desktop is running on your Mac and bridges WhatsApp, iMessage, Slack, Telegram, and more into one API.
-                Click below to authorize this app — Beeper will show a quick consent dialog.
+                Beeper Desktop runs on your Mac and bridges WhatsApp, iMessage, Slack, Telegram,
+                and more. Click below — your browser will contact Beeper directly to authorise.
               </p>
+
+              {/* Advanced: custom API URL for ngrok / public tunnels */}
+              <div className="mb-4">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced(v => !v)}
+                  className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  {showAdvanced ? '▾' : '▸'} Advanced
+                </button>
+                {showAdvanced && (
+                  <div className="mt-2">
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Beeper Desktop API URL
+                      <span className="ml-1 text-gray-400">(use ngrok URL if accessing remotely)</span>
+                    </label>
+                    <input
+                      type="url"
+                      value={beeperApiUrl}
+                      onChange={e => setBeeperApiUrl(e.target.value.replace(/\/$/, ''))}
+                      placeholder="http://localhost:23373"
+                      className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-300"
+                    />
+                  </div>
+                )}
+              </div>
+
               <button
                 onClick={handleConnectBeeper}
                 disabled={isBusy}
