@@ -12,7 +12,8 @@ import type { NextRequest } from 'next/server';
 const PUBLIC_PATHS = [
   '/login',
   '/api/auth/login',
-  '/api/beeper/callback', // OAuth redirect — no user session available
+  '/api/beeper/callback', // Legacy API-route callback (kept for safety)
+  '/beeper/callback',     // New client-side OAuth callback page
 ];
 
 export function middleware(request: NextRequest) {

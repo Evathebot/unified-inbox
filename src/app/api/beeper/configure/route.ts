@@ -30,7 +30,10 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   try {
-    const { apiUrl, accessToken } = await request.json();
+    // skipTest: true is passed by /beeper/callback when completing the OAuth flow
+    // from the browser — the server can't reach localhost:23373 on Vercel, so we
+    // trust the token that came from the OAuth flow directly.
+    const { apiUrl, accessToken, skipTest = false } = await request.json();
 
     if (!apiUrl || !accessToken) {
       return NextResponse.json(
@@ -39,15 +42,17 @@ export async function POST(request: Request) {
       );
     }
 
-    // Test the connection before saving
-    try {
-      const beeper = new BeeperService({ apiUrl, accessToken });
-      await beeper.getAccounts();
-    } catch {
-      return NextResponse.json(
-        { error: 'Could not connect to Beeper. Check that Beeper Desktop is running and the credentials are correct.' },
-        { status: 400 }
-      );
+    // Test the connection before saving (only when not coming from the OAuth callback)
+    if (!skipTest) {
+      try {
+        const beeper = new BeeperService({ apiUrl, accessToken });
+        await beeper.getAccounts();
+      } catch {
+        return NextResponse.json(
+          { error: 'Could not connect to Beeper. Check that Beeper Desktop is running and the credentials are correct.' },
+          { status: 400 }
+        );
+      }
     }
 
     const workspace = await requireWorkspace();

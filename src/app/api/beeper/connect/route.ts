@@ -1,17 +1,29 @@
 /**
- * POST /api/beeper/connect
+ * Beeper Desktop OAuth helpers.
  *
- * Initiates the OAuth-style Beeper workspace connection flow.
- * Generates a state token, stores it in the DB, and returns the
- * Beeper authorisation URL for the client to redirect to.
+ * The Beeper Desktop API lives at http://localhost:23373 on the user's Mac.
+ * When the app is hosted on Vercel (or any cloud server), the server CANNOT
+ * reach that address — only the user's browser can, since both Beeper and
+ * the browser are on the same machine.
+ *
+ * Therefore:
+ *   - GET  /api/beeper/connect  → generates PKCE state + code challenge,
+ *                                 stores them server-side, and returns them
+ *                                 to the browser. No localhost call here.
+ *   - POST /api/beeper/connect  → saves the OAuth clientId after the browser
+ *                                 has registered with Beeper Desktop.
+ *
+ * The browser (settings page) is responsible for:
+ *   1. Calling POST http://localhost:23373/oauth/register  → gets client_id
+ *   2. Redirecting to http://localhost:23373/oauth/authorize?...
+ *   3. Landing on /beeper/callback (a client-side page) after Beeper approves
+ *   4. Calling POST http://localhost:23373/oauth/token  from that page
+ *   5. POSTing the resulting access_token to /api/beeper/configure
  */
 import { NextResponse } from 'next/server';
 import { createHash, randomBytes } from 'crypto';
 import { prisma } from '@/lib/db';
 import { requireWorkspace, AuthError } from '@/lib/auth';
-
-const BEEPER_API_URL = 'http://localhost:23373';
-const REDIRECT_URI = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/beeper/callback`;
 
 function generateCodeVerifier(): string {
   return randomBytes(48).toString('base64url');
@@ -24,10 +36,9 @@ function deriveCodeChallenge(verifier: string): string {
 /**
  * GET /api/beeper/connect
  *
- * Initiates the Beeper Desktop OAuth flow with PKCE for the logged-in user.
- * The workspaceId is embedded in the state token so /api/beeper/callback can
- * find the right workspace without a session cookie (the redirect comes from
- * Beeper, not the user's browser session).
+ * Generates PKCE params and stores them in the workspace settings.
+ * Returns state, codeVerifier (for the browser to cache), codeChallenge,
+ * and the redirectUri the browser should send to Beeper's authorize endpoint.
  */
 export async function GET() {
   try {
@@ -38,33 +49,6 @@ export async function GET() {
       settings = workspace.settings ? JSON.parse(workspace.settings) : {};
     } catch {}
 
-    // Get or register an OAuth client
-    let clientId = settings.beeperClientId;
-    if (!clientId) {
-      const regRes = await fetch(`${BEEPER_API_URL}/oauth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client_name: 'Unified Inbox',
-          redirect_uris: [REDIRECT_URI],
-          grant_types: ['authorization_code'],
-          response_types: ['code'],
-          scope: 'read write',
-        }),
-      });
-
-      if (!regRes.ok) {
-        return NextResponse.json(
-          { error: 'Could not register with Beeper. Is Beeper Desktop running?' },
-          { status: 502 }
-        );
-      }
-
-      const reg = await regRes.json();
-      clientId = reg.client_id as string;
-    }
-
-    // State = <randomToken>.<workspaceId> so callback can look up the right workspace
     const randomState = randomBytes(16).toString('base64url');
     const state = `${randomState}.${workspace.id}`;
     const codeVerifier = generateCodeVerifier();
@@ -75,29 +59,64 @@ export async function GET() {
       data: {
         settings: JSON.stringify({
           ...settings,
-          beeperClientId: clientId,
           beeperOAuthState: state,
           beeperCodeVerifier: codeVerifier,
         }),
       },
     });
 
-    const authUrl = new URL(`${BEEPER_API_URL}/oauth/authorize`);
-    authUrl.searchParams.set('client_id', clientId);
-    authUrl.searchParams.set('redirect_uri', REDIRECT_URI);
-    authUrl.searchParams.set('response_type', 'code');
-    authUrl.searchParams.set('scope', 'read write');
-    authUrl.searchParams.set('state', state);
-    authUrl.searchParams.set('code_challenge', codeChallenge);
-    authUrl.searchParams.set('code_challenge_method', 'S256');
-
-    return NextResponse.json({ authUrl: authUrl.toString(), clientId });
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    return NextResponse.json({
+      state,
+      codeVerifier,   // browser stores this in sessionStorage for the callback page
+      codeChallenge,
+      redirectUri: `${appUrl}/beeper/callback`,
+    });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
-    const msg = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[Beeper connect] Error:', msg);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to initialize OAuth flow' }, { status: 500 });
+  }
+}
+
+/**
+ * POST /api/beeper/connect
+ *
+ * Saves the OAuth clientId + apiUrl after the browser has registered
+ * with Beeper Desktop's local HTTP server.
+ * Body: { clientId: string; apiUrl: string }
+ */
+export async function POST(request: Request) {
+  try {
+    const workspace = await requireWorkspace();
+    const { clientId, apiUrl } = await request.json();
+
+    if (!clientId) {
+      return NextResponse.json({ error: 'clientId is required' }, { status: 400 });
+    }
+
+    let settings: Record<string, string> = {};
+    try {
+      settings = workspace.settings ? JSON.parse(workspace.settings) : {};
+    } catch {}
+
+    await prisma.workspace.update({
+      where: { id: workspace.id },
+      data: {
+        settings: JSON.stringify({
+          ...settings,
+          beeperClientId: clientId,
+          beeperApiUrl: apiUrl || 'http://localhost:23373',
+        }),
+      },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+    return NextResponse.json({ error: 'Failed to save client ID' }, { status: 500 });
   }
 }
