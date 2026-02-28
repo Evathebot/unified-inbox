@@ -76,7 +76,9 @@ export async function GET() {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
-    return NextResponse.json({ error: 'Failed to initialize OAuth flow' }, { status: 500 });
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('[BeeperConnect] GET error:', msg);
+    return NextResponse.json({ error: `Failed to initialize OAuth flow: ${msg}` }, { status: 500 });
   }
 }
 
@@ -117,6 +119,8 @@ export async function POST(request: Request) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
-    return NextResponse.json({ error: 'Failed to save client ID' }, { status: 500 });
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('[BeeperConnect] POST error:', msg);
+    return NextResponse.json({ error: `Failed to save client ID: ${msg}` }, { status: 500 });
   }
 }
