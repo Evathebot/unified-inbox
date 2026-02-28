@@ -204,8 +204,10 @@ function SettingsContent() {
         body: JSON.stringify({ clientId, apiUrl: beeperApiUrl }),
       });
 
-      // 4. Stash OAuth params in sessionStorage for the /beeper/callback page
-      sessionStorage.setItem('beeper_oauth', JSON.stringify({
+      // 4. Stash OAuth params in localStorage for the /beeper/callback page
+      //    (localStorage is used — not sessionStorage — so the data survives if
+      //    Beeper Desktop opens the callback URL in a new browser tab/window)
+      localStorage.setItem('beeper_oauth', JSON.stringify({
         codeVerifier,
         clientId,
         apiUrl: beeperApiUrl,
