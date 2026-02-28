@@ -3,6 +3,7 @@ import { Geist } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
+import { APP_VERSION } from "@/lib/version";
 
 // Ensure the layout (and all nested routes) are always server-rendered
 // fresh so DB data is never served from a stale build-time cache.
@@ -39,7 +40,7 @@ export default function RootLayout({
           {/* Main content area */}
           <main className="flex-1 overflow-auto bg-gray-50 relative pb-16 md:pb-0">
             <div className="absolute top-3 right-4 z-50 text-[11px] font-mono text-gray-400 bg-white/80 backdrop-blur-sm px-2 py-0.5 rounded-md border border-gray-100">
-              v0.6.0
+              {APP_VERSION}
             </div>
             {children}
           </main>
