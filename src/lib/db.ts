@@ -49,8 +49,24 @@ const createPrismaClient = () => {
   });
 };
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
+/**
+ * Lazy Prisma singleton via Proxy.
+ *
+ * Deferring createPrismaClient() until the first actual DB call prevents
+ * Next.js static-page generation (e.g. /_not-found) from throwing during
+ * `next build` just because env vars aren't available at module-load time.
+ */
+function getClient(): PrismaClient {
+  if (globalForPrisma.prisma) return globalForPrisma.prisma;
+  const client = createPrismaClient();
+  if (process.env.NODE_ENV !== 'production') {
+    globalForPrisma.prisma = client;
+  }
+  return client;
 }
+
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_, prop: string | symbol) {
+    return Reflect.get(getClient(), prop);
+  },
+});
