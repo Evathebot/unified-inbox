@@ -10,6 +10,40 @@ import { getRelativeTime } from '@/lib/mockData';
 import { ConversationGroup, SortType, AccountFilter } from './types';
 import FilterPanel from './FilterPanel';
 
+/** Returns a short AI-signal badge label based on message content and priority */
+function getAISignal(
+  preview: string,
+  priority: number,
+  senderName: string,
+): { label: string; classes: string } | null {
+  const text = preview.toLowerCase();
+
+  // Overdue / high urgency — top priority
+  if (priority >= 85) return { label: '🚨 Critical', classes: 'bg-red-100 text-red-700' };
+
+  // Action words in message body
+  if (/\b(asap|urgent|immediately|right away|as soon as possible)\b/.test(text)) {
+    return { label: '⚡ Urgent', classes: 'bg-orange-100 text-orange-700' };
+  }
+
+  // Decision requested
+  if (/\b(approve|approval|sign off|sign-off|authorize|confirm|decision|decide)\b/.test(text)) {
+    return { label: '✅ Decision', classes: 'bg-blue-100 text-blue-700' };
+  }
+
+  // Question that needs an answer
+  if (/\?/.test(preview) && priority >= 50 && senderName !== 'Me') {
+    return { label: '💬 Reply needed', classes: 'bg-purple-100 text-purple-700' };
+  }
+
+  // Deadline / date mention
+  if (/\b(deadline|due|by (monday|tuesday|wednesday|thursday|friday|tomorrow|eod|end of day|end of week))\b/.test(text)) {
+    return { label: '📅 Deadline', classes: 'bg-amber-100 text-amber-700' };
+  }
+
+  return null;
+}
+
 interface ConversationListProps {
   groups: ConversationGroup[];
   selectedGroup: ConversationGroup | null;
@@ -146,6 +180,12 @@ export default function ConversationList({
           const isPriority = group.highestPriority >= 70;
           const priorityBorderColor = group.highestPriority >= 80 ? 'border-l-red-500' : 'border-l-orange-400';
 
+          // AI signal badge — smart urgency/intent detection from preview + priority
+          const latestIncoming = [...group.messages].reverse().find(m => m.sender.name !== 'Me');
+          const aiSignal = isUnread && latestIncoming
+            ? getAISignal(latestIncoming.preview || latestIncoming.body || '', group.highestPriority, group.senderName)
+            : null;
+
           return (
             <div
               key={group._groupKey}
@@ -251,12 +291,19 @@ export default function ConversationList({
                     </div>
                   )}
 
-                  {/* AI draft badge */}
-                  {group.hasAIDraft && (
-                    <div className="mt-1">
-                      <span className="ai-badge text-[10px] font-semibold text-white px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                        <Sparkles size={9} /> AI draft ready
-                      </span>
+                  {/* AI signal badge + AI draft badge */}
+                  {(aiSignal || group.hasAIDraft) && (
+                    <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                      {aiSignal && (
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${aiSignal.classes}`}>
+                          {aiSignal.label}
+                        </span>
+                      )}
+                      {group.hasAIDraft && (
+                        <span className="ai-badge text-[10px] font-semibold text-white px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                          <Sparkles size={9} /> AI draft ready
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>

@@ -73,32 +73,55 @@ function calculatePriorityScoreHeuristic(message: Message & { contact?: Contact 
   };
 }
 
+export type DraftTone = 'friendly' | 'formal' | 'brief' | 'detailed';
+
+const TONE_INSTRUCTIONS: Record<DraftTone, string> = {
+  friendly: 'Use a warm, conversational tone — like a colleague. Keep it natural and personable.',
+  formal: 'Use a professional, formal tone. No contractions, proper salutations, structured paragraphs.',
+  brief: 'Be extremely concise — 1-3 sentences maximum. Get straight to the point.',
+  detailed: 'Be thorough and comprehensive. Address all points raised, provide context and next steps.',
+};
+
 /**
  * Generate a personalized draft reply using LLM
  */
 export async function generateDraftReply(
-  message: Message,
-  conversationMessages: Message[] = []
+  message: Message & { contact?: Contact | null },
+  conversationMessages: Message[] = [],
+  tone: DraftTone = 'friendly'
 ): Promise<string | null> {
+  const senderName = message.contact?.name || message.senderName || 'them';
+  const channel = message.channel || 'message';
+
+  // Build conversation context with real sender names
   const context = conversationMessages
-    .map(m => `${m.senderId === message.senderId ? 'Them' : 'Me'}: ${m.body}`)
+    .slice(-10)
+    .map(m => {
+      const isMe = m.senderId !== message.senderId;
+      return `${isMe ? 'Me' : senderName}: ${m.body?.substring(0, 300) || ''}`;
+    })
     .join('\n');
 
+  const toneInstruction = TONE_INSTRUCTIONS[tone];
+
   const prompt = `
-    Generate a professional yet friendly draft reply to the following message.
-    
-    Conversation Context:
-    ${context}
+    Draft a reply to this ${channel} message from ${senderName}.
 
-    Current Message to Reply to:
-    ${message.body}
+    ${context ? `Conversation history:\n${context}\n\n` : ''}Message to reply to (from ${senderName}):
+    "${message.body?.substring(0, 500) || ''}"
 
-    Respond ONLY with the text of the reply. No greetings like "Certainly" or "Here is the draft".
+    Tone instruction: ${toneInstruction}
+
+    Rules:
+    - Respond ONLY with the reply text itself
+    - Do NOT include subject lines, labels, or preamble like "Here is a draft"
+    - Do NOT start with "Hi [name]," or any greeting unless the tone is formal
+    - Match the channel style: ${channel === 'slack' ? 'Slack message (conversational, possibly use emoji)' : channel === 'gmail' ? 'Email (more structured)' : 'chat message (natural)'}
   `;
 
   try {
     const draft = await generateCompletion(prompt, {
-      system: "You are a helpful assistant drafting replies for a busy professional. Match their tone (usually professional but approachable)."
+      system: `You are a helpful assistant drafting replies for a busy professional. ${toneInstruction} Never write preamble — output ONLY the reply text.`,
     });
     return draft.trim();
   } catch (error) {
@@ -160,6 +183,40 @@ export async function analyzeContactPersonality(
       keyTopics: [],
       relationshipStrength: 50,
     };
+  }
+}
+
+/**
+ * Generate 3 short smart reply options for a message
+ */
+export async function generateQuickReplies(
+  message: Message & { contact?: Contact | null },
+  channel: string
+): Promise<string[]> {
+  const senderName = message.contact?.name || message.senderName || 'them';
+  const body = message.body?.substring(0, 600) || '';
+
+  const prompt = `You are drafting 3 ultra-short smart replies for a busy professional.
+
+Channel: ${channel}
+From: ${senderName}
+Message: "${body}"
+
+Generate exactly 3 short reply options (each 2–8 words max). They should:
+- Each address the message differently (e.g. agree, ask a question, defer)
+- Sound natural for ${channel === 'slack' ? 'Slack' : channel === 'gmail' ? 'email' : 'chat'}
+- Be ready to send as-is, no placeholders
+
+Respond with JSON: {"replies": ["reply 1", "reply 2", "reply 3"]}`;
+
+  try {
+    const result = await generateJSON<{ replies: string[] }>(prompt, {
+      system: 'You generate ultra-concise smart reply suggestions. Each reply must be complete and ready to send. Output ONLY valid JSON.',
+    });
+    return (result.replies || []).slice(0, 3).filter(Boolean);
+  } catch (error) {
+    console.error('Quick replies generation failed:', error);
+    return [];
   }
 }
 

@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { generateDraftReply } from '@/lib/ai';
+import { generateDraftReply, type DraftTone } from '@/lib/ai';
 
 /**
  * POST /api/ai/draft
- * 
- * Accept messageId and return AI-drafted reply based on conversation context.
- * For MVP, uses template-based logic (not actual Claude API).
+ *
+ * Accept messageId + optional tone and return AI-drafted reply based on conversation context.
+ * tone: 'friendly' | 'formal' | 'brief' | 'detailed' (default: 'friendly')
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { messageId } = body;
+    const { messageId, tone = 'friendly' } = body;
 
     if (!messageId) {
       return NextResponse.json({ error: 'messageId required' }, { status: 400 });
@@ -37,9 +37,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Message not found' }, { status: 404 });
     }
 
-    // Generate draft reply
+    // Generate draft reply with optional tone
     const conversationMessages = message.conversation?.messages || [];
-    const draftReply = await generateDraftReply(message, conversationMessages);
+    const draftReply = await generateDraftReply(message, conversationMessages, tone as DraftTone);
 
     // Only persist real AI drafts — never store fallback/null
     if (draftReply) {

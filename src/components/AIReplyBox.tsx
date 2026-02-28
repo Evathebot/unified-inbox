@@ -3,19 +3,35 @@
 import { useState, useEffect } from 'react';
 import { Send, Check, Pencil, Eye, RefreshCw, X } from 'lucide-react';
 
+export type DraftTone = 'friendly' | 'formal' | 'brief' | 'detailed';
+
+const TONES: { key: DraftTone; label: string; emoji: string }[] = [
+  { key: 'friendly', label: 'Friendly', emoji: '😊' },
+  { key: 'formal',   label: 'Formal',   emoji: '🎯' },
+  { key: 'brief',    label: 'Brief',    emoji: '⚡' },
+  { key: 'detailed', label: 'Detailed', emoji: '📝' },
+];
+
 interface AIReplyBoxProps {
   suggestedReply: string;
   onSend: (text: string) => void;
-  onRegenerate?: () => void;
+  onRegenerate?: (tone: DraftTone) => void;
   onDismiss?: () => void;
   /** Pass true while the AI draft is still being fetched from the server */
   loading?: boolean;
 }
 
-export default function AIReplyBox({ suggestedReply, onSend, onRegenerate, onDismiss, loading = false }: AIReplyBoxProps) {
+export default function AIReplyBox({
+  suggestedReply,
+  onSend,
+  onRegenerate,
+  onDismiss,
+  loading = false,
+}: AIReplyBoxProps) {
   const [reply, setReply] = useState(suggestedReply);
   const [isEditing, setIsEditing] = useState(false);
   const [sent, setSent] = useState(false);
+  const [activeTone, setActiveTone] = useState<DraftTone>('friendly');
 
   // Keep reply in sync when the draft arrives from parent
   useEffect(() => {
@@ -32,9 +48,15 @@ export default function AIReplyBox({ suggestedReply, onSend, onRegenerate, onDis
     setTimeout(() => setSent(false), 3000);
   };
 
+  const handleToneChange = (tone: DraftTone) => {
+    if (tone === activeTone) return;
+    setActiveTone(tone);
+    onRegenerate?.(tone);
+  };
+
   return (
     <div className="ai-border-gradient bg-white rounded-xl p-4 shadow-sm">
-      {/* Header with AI orb */}
+      {/* Header with AI orb + tone selector */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2.5">
           <div className="ai-orb relative">
@@ -56,7 +78,7 @@ export default function AIReplyBox({ suggestedReply, onSend, onRegenerate, onDis
         <div className="flex items-center gap-2">
           {!loading && onRegenerate && (
             <button
-              onClick={onRegenerate}
+              onClick={() => onRegenerate(activeTone)}
               className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
               title="Regenerate draft"
             >
@@ -76,6 +98,28 @@ export default function AIReplyBox({ suggestedReply, onSend, onRegenerate, onDis
         </div>
       </div>
 
+      {/* Tone selector — shown when not loading */}
+      {!loading && (
+        <div className="flex items-center gap-1.5 mb-3">
+          <span className="text-[10px] text-gray-400 uppercase tracking-wide font-medium mr-0.5">Tone</span>
+          {TONES.map(({ key, label, emoji }) => (
+            <button
+              key={key}
+              onClick={() => handleToneChange(key)}
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium transition-all ${
+                activeTone === key
+                  ? 'bg-gradient-to-r from-purple-500 to-orange-500 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}
+              title={`Rewrite in ${label} tone`}
+            >
+              <span>{emoji}</span>
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Reply content */}
       {loading ? (
         <div className="p-3 bg-gray-50 rounded-lg">
@@ -91,11 +135,13 @@ export default function AIReplyBox({ suggestedReply, onSend, onRegenerate, onDis
           onChange={(e) => setReply(e.target.value)}
           className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-800 resize-none focus:outline-none focus:ring-2 focus:ring-purple-100 focus:border-purple-300"
           rows={4}
+          autoFocus
         />
       ) : (
         <p
           onClick={() => setIsEditing(true)}
           className="p-3 bg-gray-50 rounded-lg text-sm text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors leading-relaxed whitespace-pre-line"
+          title="Click to edit"
         >
           {reply}
         </p>

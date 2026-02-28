@@ -5,10 +5,11 @@ import { Phone, Video, MoreHorizontal, SmilePlus, Forward, Copy, Check, X } from
 import Avatar from '@/components/Avatar';
 import ChannelBadge from '@/components/ChannelBadge';
 import ChannelContextBadge from '@/components/ChannelContextBadge';
-import AIReplyBox from '@/components/AIReplyBox';
+import AIReplyBox, { type DraftTone } from '@/components/AIReplyBox';
 import { getRelativeTime, Message } from '@/lib/mockData';
 import { ConversationGroup } from './types';
 import ReplyToolbar from './ReplyToolbar';
+import QuickReplies from '@/components/QuickReplies';
 
 /**
  * Detail panel for the selected conversation group (right two-thirds of the inbox).
@@ -393,7 +394,7 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [group.messages]);
 
-  const handleRegenerateDraft = () => {
+  const handleRegenerateDraft = useCallback((tone: DraftTone = 'friendly') => {
     setAiDraft('');
     setDraftLoading(true);
     // Invalidate cache entry for this conversation so next visit re-fetches
@@ -405,7 +406,7 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
     fetch('/api/ai/draft', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messageId: latestMsg.id }),
+      body: JSON.stringify({ messageId: latestMsg.id, tone }),
     })
       .then(r => r.json())
       .then(d => {
@@ -416,7 +417,8 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
         aiCacheRef.current.set(conversationKey, { summary: ex?.summary ?? null, draft });
       })
       .catch(() => { setAiDraft(''); setDraftLoading(false); });
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationKey, group.messages]);
 
   const addLocalMessage = useCallback((text: string) => {
     const msg: Message = {
@@ -839,11 +841,34 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
               suggestedReply={aiDraft}
               loading={draftLoading}
               onSend={handleSendDraft}
-              onRegenerate={handleRegenerateDraft}
+              onRegenerate={(tone) => handleRegenerateDraft(tone)}
               onDismiss={() => setAiDraftDismissed(true)}
             />
           </div>
         )}
+
+        {/* ── Smart Quick Replies ────────────────────────────── */}
+        {(() => {
+          const latestIncoming = [...(group.messages || [])]
+            .reverse()
+            .find(m => m.sender.name !== 'Me');
+          return latestIncoming?.id ? (
+            <QuickReplies
+              messageId={latestIncoming.id}
+              conversationKey={conversationKey}
+              onSelect={(text) => {
+                addLocalMessage(text);
+                if (group.conversationId) {
+                  fetch('/api/conversations/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ conversationId: group.conversationId, text, channel: group.channel }),
+                  }).catch(() => {});
+                }
+              }}
+            />
+          ) : null;
+        })()}
 
         {/* ── Compose bar ───────────────────────────────────── */}
         <ReplyToolbar

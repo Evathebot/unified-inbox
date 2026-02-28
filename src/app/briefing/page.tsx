@@ -4,6 +4,7 @@ import MessageCard from '@/components/MessageCard';
 import CalendarEventCard from '@/components/CalendarEvent';
 import BriefingAISummary from '@/components/BriefingAISummary';
 import BriefingGreeting from '@/components/BriefingGreeting';
+import ActionItemsList from '@/components/ActionItemsList';
 import { getBriefing } from '@/lib/data';
 
 export const dynamic = 'force-dynamic';
@@ -38,12 +39,17 @@ export default async function BriefingPage() {
         {/* Hero Section — client component for correct local timezone */}
         <BriefingGreeting />
 
-        {/* AI Daily Summary — loaded client-side */}
+        {/* AI Daily Summary — auto-loads on mount with real message content */}
         <BriefingAISummary
           priorityCount={briefing.priorityMessages.length}
           overdueCount={briefing.overdueReplies.length}
           calendarCount={briefing.calendarEvents.length}
           topSenders={briefing.priorityMessages.slice(0, 3).map(m => m.sender.name)}
+          topMessages={briefing.priorityMessages.slice(0, 5).map(m => ({
+            sender: m.sender.name,
+            preview: m.preview,
+            channel: m.channel,
+          }))}
         />
 
         {/* Stats Row */}
@@ -97,22 +103,9 @@ export default async function BriefingPage() {
             </div>
           </BriefingCard>
 
-          {/* Action Items */}
+          {/* Action Items — interactive checkboxes with localStorage persistence */}
           <BriefingCard title="Action Items" icon={CheckSquare} iconColor="text-green-400">
-            <div className="space-y-2">
-              {briefing.actionItems.map((item, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 transition-all cursor-pointer"
-                >
-                  <div className="w-5 h-5 rounded border-2 border-gray-300 shrink-0 mt-0.5" />
-                  <p className="text-gray-600 text-sm flex-1">{item}</p>
-                </div>
-              ))}
-              {briefing.actionItems.length === 0 && (
-                <p className="text-gray-500 text-center py-4">No action items extracted</p>
-              )}
-            </div>
+            <ActionItemsList items={briefing.actionItems} />
           </BriefingCard>
         </div>
       </div>
