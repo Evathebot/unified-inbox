@@ -433,7 +433,7 @@ export async function getConversation(contactId: string): Promise<Message[]> {
     return messages.map((m) => transformMessage(m));
   } catch (error) {
     console.error('Error fetching conversation from database:', error);
-    return mockMessages.filter((m) => m.sender.name === contactId);
+    return [];
   }
 }
 
