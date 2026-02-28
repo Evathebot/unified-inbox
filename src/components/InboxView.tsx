@@ -27,6 +27,9 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
   const stateRef = useRef(state);
   stateRef.current = state;
 
+  // Ref so the keyboard handler always calls the latest toast-aware archive fn
+  const handleArchiveWithToastRef = useRef<(group: ConversationGroup) => void>(() => {});
+
   // Poll the DB every 10 seconds and re-render with fresh data
   useEffect(() => {
     const interval = setInterval(() => router.refresh(), 10_000);
@@ -138,7 +141,6 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
         conversationGroups,
         effectiveSelected,
         handleSelectGroup,
-        handleArchive,
       } = stateRef.current;
 
       const currentIdx = conversationGroups.findIndex(
@@ -154,8 +156,8 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
         const prev = conversationGroups[currentIdx - 1];
         if (prev) handleSelectGroup(prev);
       } else if (e.key === 'e') {
-        // Archive current conversation
-        if (effectiveSelected) handleArchive(effectiveSelected);
+        // Archive current conversation (with undo toast)
+        if (effectiveSelected) handleArchiveWithToastRef.current(effectiveSelected);
       } else if (e.key === 'r') {
         // Focus reply textarea — prevent the 'r' character from being typed into it
         const el = document.querySelector('[data-reply-textarea]') as HTMLTextAreaElement;
@@ -174,6 +176,7 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     toastTimerRef.current = setTimeout(() => setArchivedToast(null), 4000);
   }, [state]);
+  handleArchiveWithToastRef.current = handleArchiveWithToast;
 
   const handleUndoArchive = useCallback(() => {
     if (archivedToast) {
