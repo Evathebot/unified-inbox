@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
+import { PrismaLibSql } from '@prisma/adapter-libsql';
 import { randomBytes, scrypt } from 'crypto';
 import { promisify } from 'util';
 
@@ -11,7 +12,13 @@ async function hashPassword(password: string): Promise<string> {
   return `${salt}:${hash.toString('hex')}`;
 }
 
-const adapter = new PrismaBetterSqlite3({ url: 'file:./dev.db' });
+const tursoUrl = process.env.TURSO_DATABASE_URL;
+const tursoToken = process.env.TURSO_AUTH_TOKEN;
+
+const adapter = tursoUrl
+  ? new PrismaLibSql({ url: tursoUrl, authToken: tursoToken })
+  : new PrismaBetterSqlite3({ url: 'file:./prisma/dev.db' });
+
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
@@ -32,22 +39,34 @@ async function main() {
   await prisma.workspace.deleteMany();
   await prisma.user.deleteMany();
 
-  console.log('👤 Creating user and workspace...');
+  console.log('👤 Creating users and workspaces...');
 
-  // Create the default user
+  const alexPassword = 'DarkHorse2026!';
+  const nickPassword = 'DarkHorse2026!';
+
+  // Create Alex
   const user = await prisma.user.create({
     data: {
-      email: 'alex@example.com',
+      email: 'alex@darkhorseads.com',
       name: 'Alex',
-      passwordHash: await hashPassword('password123'),
+      passwordHash: await hashPassword(alexPassword),
     },
   });
 
-  // Create their workspace
+  // Create Nick
+  const nickUser = await prisma.user.create({
+    data: {
+      email: 'nick@darkhorseads.com',
+      name: 'Nick',
+      passwordHash: await hashPassword(nickPassword),
+    },
+  });
+
+  // Create Alex's workspace
   const workspace = await prisma.workspace.create({
     data: {
       userId: user.id,
-      name: 'My Workspace',
+      name: "Alex's Workspace",
       settings: JSON.stringify({
         autoDraft: true,
         priorityScore: 60,
@@ -57,7 +76,21 @@ async function main() {
     },
   });
 
-  console.log(`✅ Created user (${user.email}) and workspace`);
+  // Create Nick's workspace
+  await prisma.workspace.create({
+    data: {
+      userId: nickUser.id,
+      name: "Nick's Workspace",
+      settings: JSON.stringify({
+        autoDraft: true,
+        priorityScore: 60,
+        notifications: true,
+        theme: 'light',
+      }),
+    },
+  });
+
+  console.log(`✅ Created users (${user.email}, ${nickUser.email}) and workspaces`);
   console.log('📧 Creating contacts...');
 
   // Create contacts (using correct schema fields: name, company, role, location, bio, etc.)
@@ -732,8 +765,8 @@ async function main() {
   console.log('✅ Created calendar events');
   console.log(`\n🎉 Seed completed successfully!`);
   console.log(`\n📋 Login credentials:`);
-  console.log(`   Email:    ${user.email}`);
-  console.log(`   Password: password123`);
+  console.log(`   Alex  →  alex@darkhorseads.com  /  ${alexPassword}`);
+  console.log(`   Nick  →  nick@darkhorseads.com  /  ${nickPassword}`);
 }
 
 main()
