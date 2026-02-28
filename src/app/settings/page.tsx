@@ -254,10 +254,22 @@ function SettingsContent() {
           fetch(`${apiUrl}/v1/accounts`, { headers, signal: AbortSignal.timeout(15000) }),
           fetch(`${apiUrl}/v1/chats?limit=50&includeMuted=true`, { headers, signal: AbortSignal.timeout(15000) }),
         ]);
-        if (acctRes.ok) accounts = (await acctRes.json())?.value || (await acctRes.clone().json())?.items || accounts;
-        if (chatRes.ok) chats = (await chatRes.json())?.items || chats;
-      } catch {
-        setBeeperError(`Cannot reach Beeper Desktop at ${apiUrl}. Make sure Beeper Desktop is running on this Mac.`);
+        console.log('[Sync] accounts status:', acctRes.status, '| chats status:', chatRes.status);
+        if (acctRes.ok) {
+          // Parse JSON once — Beeper may return { value: [...] }, { items: [...] }, or a plain array
+          const j = await acctRes.json();
+          console.log('[Sync] accounts shape:', JSON.stringify(j)?.slice(0, 300));
+          accounts = j?.value || j?.items || (Array.isArray(j) ? j : []);
+        }
+        if (chatRes.ok) {
+          const j = await chatRes.json();
+          console.log('[Sync] chats shape:', JSON.stringify(j)?.slice(0, 300));
+          chats = j?.items || (Array.isArray(j) ? j : []);
+        }
+      } catch (err: any) {
+        const errMsg = err?.message || String(err);
+        console.error('[Sync] Beeper fetch error:', errMsg);
+        setBeeperError(`Cannot reach Beeper Desktop at ${apiUrl}. Make sure Beeper Desktop is running on this Mac. (${errMsg})`);
         setBeeperStatus('sync-error');
         setTimeout(() => setBeeperStatus('idle'), 5000);
         return;
