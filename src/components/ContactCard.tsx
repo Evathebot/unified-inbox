@@ -17,8 +17,12 @@ export default function ContactCard({ contact }: ContactCardProps) {
 
           <div className="flex-1 min-w-0">
             <h3 className="text-gray-900 font-semibold mb-0.5">{contact.name}</h3>
-            <p className="text-sm text-gray-500 mb-0.5">{contact.role}</p>
-            <p className="text-xs text-gray-400 mb-3">{contact.company}</p>
+            {contact.role && contact.role !== 'Contact' && (
+              <p className="text-sm text-gray-500 mb-0.5">{contact.role}</p>
+            )}
+            {contact.company && contact.company !== 'N/A' && (
+              <p className="text-xs text-gray-400 mb-3">{contact.company}</p>
+            )}
 
             {/* Platform logos */}
             <div className="flex items-center gap-2 mb-3">
@@ -42,7 +46,7 @@ export default function ContactCard({ contact }: ContactCardProps) {
             </div>
 
             <p className="text-xs text-gray-400 mt-2">
-              Last contact: {getRelativeTime(contact.lastInteraction)}
+              Last contact: {contact.lastInteraction.getTime() > 0 ? getRelativeTime(contact.lastInteraction) : 'Never'}
             </p>
           </div>
         </div>

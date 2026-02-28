@@ -123,7 +123,9 @@ export default async function ContactProfilePage({ params }: ContactProfilePageP
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Last Contact</span>
-                  <span className="text-gray-900 font-medium">{getRelativeTime(contact.lastInteraction)}</span>
+                  <span className="text-gray-900 font-medium">
+                    {contact.lastInteraction.getTime() > 0 ? getRelativeTime(contact.lastInteraction) : 'Never'}
+                  </span>
                 </div>
               </div>
             </GlassCard>
