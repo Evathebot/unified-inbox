@@ -44,8 +44,10 @@ function BeeperCallbackContent() {
 
     async function completeOAuth() {
       try {
-        // Load OAuth params stored by the settings page before the redirect
-        const stored = sessionStorage.getItem('beeper_oauth');
+        // Load OAuth params stored by the settings page before the redirect.
+        // We use localStorage (not sessionStorage) so the data is accessible
+        // even if Beeper Desktop opens the callback URL in a new browser tab.
+        const stored = localStorage.getItem('beeper_oauth');
         if (!stored) {
           router.push('/settings?beeper_error=no_code_verifier');
           return;
@@ -59,7 +61,7 @@ function BeeperCallbackContent() {
         };
 
         // One-time use — clear immediately
-        sessionStorage.removeItem('beeper_oauth');
+        localStorage.removeItem('beeper_oauth');
 
         setMessage('Exchanging authorization code with Beeper Desktop…');
 
