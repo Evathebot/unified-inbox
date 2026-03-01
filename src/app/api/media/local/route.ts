@@ -1,15 +1,18 @@
 /**
- * Local media proxy for Beeper bridge media files.
+ * Local media proxy for Beeper bridge media files and iMessage attachments.
  *
  * Beeper stores media (images, voice messages, videos) as local files under:
  *   ~/Library/Application Support/BeeperTexts/media/<platform>/<mediaId>
+ *
+ * iMessage attachments are stored under:
+ *   ~/Library/Messages/Attachments/<hash>/<index>/<filename>
  *
  * The message body contains either:
  *   - localmxc://local-whatsapp/<mediaId>  → ?beeper=localhostlocal-whatsapp/<mediaId>
  *   - file:///absolute/path/to/file         → ?path=/absolute/path/to/file
  *
  * This route reads the file from disk and serves it with the correct Content-Type.
- * Security: only serves files under the BeeperTexts media dir or /tmp.
+ * Security: only serves files under the BeeperTexts media dir, Messages attachments, or /tmp.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -18,7 +21,8 @@ import { join, resolve, extname } from 'path';
 import { homedir } from 'os';
 
 const BEEPER_MEDIA_DIR = join(homedir(), 'Library', 'Application Support', 'BeeperTexts', 'media');
-const ALLOWED_PREFIXES = [BEEPER_MEDIA_DIR, '/tmp'];
+const IMESSAGE_ATTACHMENTS_DIR = join(homedir(), 'Library', 'Messages', 'Attachments');
+const ALLOWED_PREFIXES = [BEEPER_MEDIA_DIR, IMESSAGE_ATTACHMENTS_DIR, '/tmp'];
 
 function getMimeType(filePath: string): string {
   const ext = extname(filePath).toLowerCase();
@@ -100,6 +104,12 @@ export async function GET(request: NextRequest) {
   } catch (err: any) {
     if (err.code === 'ENOENT') {
       return NextResponse.json({ error: 'File not found', path: filePath }, { status: 404 });
+    }
+    if (err.code === 'EPERM' || err.code === 'EACCES') {
+      // macOS privacy restriction — the process needs Full Disk Access in
+      // System Settings > Privacy & Security > Full Disk Access
+      console.warn('[media/local] Permission denied (EPERM/EACCES):', filePath);
+      return NextResponse.json({ error: 'Permission denied — grant Full Disk Access to Terminal in System Settings' }, { status: 403 });
     }
     console.error('[media/local] Error reading file:', filePath, err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
