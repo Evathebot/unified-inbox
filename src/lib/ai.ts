@@ -94,19 +94,22 @@ export async function generateDraftReply(
   const channel = message.channel || 'message';
 
   // Sanitize raw Beeper bodies for the AI prompt:
-  // - Decode JSON-wrapped format: {"text":"...","textEntities":[...]}
-  // - Replace the [text] media-only placeholder with a readable label
+  // 1. Decode JSON-wrapped format: {"text":"...","textEntities":[...]}
+  // 2. Replace the [text] media-only placeholder with a readable label
+  //    (must happen AFTER JSON decoding, because the inner text may also be [text])
   const sanitizeBodyForAI = (body: string | null | undefined): string => {
     if (!body) return '';
-    const trimmed = body.trim();
-    if (trimmed === '[text]') return '[media attachment]';
-    if (trimmed.startsWith('{')) {
+    let text = body.trim();
+    // Decode Beeper JSON-wrapped bodies first
+    if (text.startsWith('{')) {
       try {
-        const parsed = JSON.parse(trimmed);
-        if (typeof parsed?.text === 'string') return parsed.text;
+        const parsed = JSON.parse(text);
+        if (typeof parsed?.text === 'string') text = parsed.text.trim();
       } catch { /* not valid JSON */ }
     }
-    return body;
+    // Replace media-only placeholder (works both on raw '[text]' and JSON-decoded '[text]')
+    if (text === '[text]') return '[media attachment]';
+    return text;
   };
 
   // Build conversation context with real sender names

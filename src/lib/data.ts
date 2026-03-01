@@ -269,6 +269,9 @@ function transformMessage(dbMessage: any, conv?: { id: string; title: string; ty
       : resolvedMessageType === 'file'
       ? '📎 File'
       : '📎 Attachment'
+    // Body is still the raw [text] placeholder (e.g. no metadata URL found)
+    : displayBody.trim() === '[text]'
+    ? '📎 Attachment'
     : displayBody.length > 150
     ? displayBody.substring(0, 150) + '…'
     : displayBody;
