@@ -7,6 +7,7 @@ import { ConversationGroup, SortType, AccountFilter } from '@/components/inbox/t
 
 const STORAGE_KEY = 'unified-inbox-read';
 const ARCHIVED_KEY = 'unified-inbox-archived';
+const NAMES_KEY = 'unified-inbox-names';
 
 /**
  * Core inbox state management hook.
@@ -33,6 +34,7 @@ export function useInboxState(initialMessages: Message[]) {
   const [showCompose, setShowCompose] = useState(false);
   const [readMessages, setReadMessages] = useState<Set<string>>(new Set());
   const [archivedGroups, setArchivedGroups] = useState<Set<string>>(new Set());
+  const [customNames, setCustomNames] = useState<Map<string, string>>(new Map());
 
   // Compose state
   const [composeTo, setComposeTo] = useState('');
@@ -83,6 +85,25 @@ export function useInboxState(initialMessages: Message[]) {
       // ignore
     }
   }, [archivedGroups]);
+
+  // Load custom conversation names from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(NAMES_KEY);
+      if (stored) setCustomNames(new Map(JSON.parse(stored) as [string, string][]));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Persist custom names to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(NAMES_KEY, JSON.stringify([...customNames]));
+    } catch {
+      // ignore
+    }
+  }, [customNames]);
 
   const isMessageRead = (msg: Message) => !msg.unread || readMessages.has(msg.id);
 
@@ -204,6 +225,12 @@ export function useInboxState(initialMessages: Message[]) {
       }
     });
 
+    // Apply user-defined custom names (overrides whatever name we computed above)
+    groups.forEach(g => {
+      const custom = customNames.get(g._groupKey);
+      if (custom) g.senderName = custom;
+    });
+
     // Priority conversations (>= 70) always float to the top regardless of sort mode.
     // Within each tier, sort by the user's chosen method.
     groups.sort((a, b) => {
@@ -216,7 +243,7 @@ export function useInboxState(initialMessages: Message[]) {
 
     return groups;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialMessages, searchQuery, filterUnread, filterUnanswered, accountFilter, channelFilter, sortBy, readMessages, archivedGroups]);
+  }, [initialMessages, searchQuery, filterUnread, filterUnanswered, accountFilter, channelFilter, sortBy, readMessages, archivedGroups, customNames]);
 
   // Show conversation count (not message count) in the inbox header
   const activeCount = conversationGroups.length;
@@ -235,6 +262,11 @@ export function useInboxState(initialMessages: Message[]) {
     const newRead = new Set(readMessages);
     group.messages.forEach(m => newRead.add(m.id));
     setReadMessages(newRead);
+    // Persist read state to DB so sidebar badge counts (which are server-rendered)
+    // stay accurate across refreshes and reflect what has actually been viewed.
+    if (group.conversationId) {
+      fetch(`/api/conversations/${group.conversationId}`, { method: 'PATCH' }).catch(() => {});
+    }
   };
 
   const handleArchive = (group: ConversationGroup) => {
@@ -250,6 +282,21 @@ export function useInboxState(initialMessages: Message[]) {
       next.delete(group._groupKey);
       return next;
     });
+  };
+
+  const handleRenameGroup = (group: ConversationGroup, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    // Update local state so the UI reflects the change immediately
+    setCustomNames(prev => new Map([...prev, [group._groupKey, trimmed]]));
+    // Persist to DB so the title survives a hard refresh via a server re-fetch
+    if (group.conversationId) {
+      fetch(`/api/conversations/${group.conversationId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: trimmed }),
+      }).catch(() => {});
+    }
   };
 
   const handleMarkAllRead = () => {
@@ -324,5 +371,6 @@ export function useInboxState(initialMessages: Message[]) {
     handleArchive,
     handleUnarchive,
     handleMarkAllRead,
+    handleRenameGroup,
   };
 }

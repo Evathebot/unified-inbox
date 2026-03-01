@@ -255,7 +255,10 @@ export default function InboxView({ initialMessages }: InboxViewProps) {
             onSend={state.handleSendCompose}
           />
         ) : state.effectiveSelected ? (
-          <ConversationDetail group={state.effectiveSelected} />
+          <ConversationDetail
+            group={state.effectiveSelected}
+            onRename={(newName) => state.handleRenameGroup(state.effectiveSelected!, newName)}
+          />
         ) : (
           <div className="flex items-center justify-center h-full text-gray-400 text-sm">
             Select a conversation to view messages

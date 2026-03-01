@@ -201,9 +201,45 @@ function transformMessage(dbMessage: any, conv?: { id: string; title: string; ty
   const cleanBody = parseBeeperText(dbMessage.body, rawSenderName);
   const isSystemEvent = isBeeperSystemEvent(dbMessage.body ?? '', cleanBody);
 
+  // ── Attachment extraction ────────────────────────────────────────────────
+  // Beeper stores media-only messages with body = '[text]' and the actual
+  // media URL in metadata.attachments[].srcURL.  Extract it so images,
+  // voice notes, and videos render correctly instead of showing "[text]".
+  let resolvedMessageType = dbMessage.messageType || 'text';
+  let resolvedBody = cleanBody;
+
+  if (cleanBody.trim() === '[text]' && dbMessage.metadata) {
+    try {
+      const meta = JSON.parse(dbMessage.metadata);
+      const att = Array.isArray(meta.attachments) && meta.attachments[0];
+      if (att?.srcURL) {
+        resolvedBody = att.srcURL;
+        // Derive messageType from attachment type/mimetype
+        const attType = (att.type || '').toLowerCase();
+        const mimeType = (att.mimeType || '').toLowerCase();
+        const fileName = (att.fileName || '').toLowerCase();
+        if (att.isVoiceNote || attType === 'audio' || mimeType.startsWith('audio/') || /\.(ogg|opus|m4a|mp3|wav|aac|caf)$/.test(fileName)) {
+          resolvedMessageType = 'voice';
+        } else if (attType === 'image' || mimeType.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|heic)$/.test(fileName)) {
+          resolvedMessageType = 'image';
+        } else if (attType === 'video' || mimeType.startsWith('video/') || /\.(mp4|mov|avi|mkv|webm)$/.test(fileName)) {
+          resolvedMessageType = 'video';
+        } else {
+          resolvedMessageType = 'file';
+        }
+      } else if (cleanBody.trim() === '[text]') {
+        // No usable attachment URL — skip/hide this message
+        resolvedBody = '';
+      }
+    } catch { /* invalid metadata JSON — leave as-is */ }
+  }
+
+  // If after all extraction body is empty or still literally '[text]', mark as system so it's filtered
+  const isEmptyPlaceholder = !resolvedBody.trim() || resolvedBody.trim() === '[text]';
+
   // Convert localmxc:// local bridge media to local file proxy URLs so they can be
   // displayed as images/audio in the browser (files live in ~/Library/Application Support/BeeperTexts/media/).
-  let displayBody = cleanBody.replace(/localmxc:\/\/(local-[^\/\s,;"'<>)]+)\/([^\s,;"'<>)]+)/gi, (_, platform, mediaId) => {
+  let displayBody = resolvedBody.replace(/localmxc:\/\/(local-[^\/\s,;"'<>)]+)\/([^\s,;"'<>)]+)/gi, (_, platform, mediaId) => {
     const beeperPlatform = platform.replace('local-', '');
     const beeperPath = `localhostlocal-${beeperPlatform}/${mediaId}`;
     return `/api/media/local?beeper=${encodeURIComponent(beeperPath)}`;
@@ -239,8 +275,11 @@ function transformMessage(dbMessage: any, conv?: { id: string; title: string; ty
     topicLabel,
     topicColor,
     hasAIDraft: !!dbMessage.aiDraft || !!dbMessage.aiMetadata?.draftReply,
-    messageType: dbMessage.messageType || 'text',
-    thread: dbMessage.thread
+    messageType: resolvedMessageType,
+    // Only populate thread when there is real Slack thread reply data.
+    // The old fallback (thread with just the message itself) caused every
+    // Slack message to show a spurious "1 reply · View thread →" link.
+    thread: dbMessage.thread && Array.isArray(dbMessage.thread) && dbMessage.thread.length > 0
       ? {
         messages: dbMessage.thread.map((m: any) => ({
           from: m.senderName,
@@ -248,15 +287,7 @@ function transformMessage(dbMessage: any, conv?: { id: string; title: string; ty
           timestamp: new Date(m.timestamp),
         })),
       }
-      : {
-        messages: [
-          {
-            from: dbMessage.senderName,
-            content: displayBody,
-            timestamp: new Date(dbMessage.timestamp),
-          },
-        ],
-      },
+      : undefined,
     aiDraft: dbMessage.aiDraft || dbMessage.aiMetadata?.draftReply || undefined,
     conversationId: conv?.id ?? dbMessage.conversationId,
     // Use conv.title first, then fall back to the contact's name on the conversation.
@@ -264,7 +295,8 @@ function transformMessage(dbMessage: any, conv?: { id: string; title: string; ty
     // instead of "Me" when the most-recently-fetched message was sent by the user.
     conversationTitle: conv?.title || conv?.contactName || undefined,
     isGroupConversation: (conv?.type ?? dbMessage.conversation?.type) === 'group',
-    isSystemEvent,
+    // Mark as system event if it's a true system event OR an empty/un-renderable placeholder
+    isSystemEvent: isSystemEvent || isEmptyPlaceholder,
   };
 }
 

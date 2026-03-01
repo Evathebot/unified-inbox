@@ -1,5 +1,6 @@
 /**
- * App version — update this with every meaningful release / deploy.
- * Displayed in the top-right badge in layout.tsx.
+ * App version — injected at build time from package.json + git short hash
+ * via next.config.ts `env.NEXT_PUBLIC_APP_VERSION`.
+ * Falls back to the hardcoded string if the env var isn't present.
  */
-export const APP_VERSION = 'v1.0.0';
+export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || 'v1.0.0';

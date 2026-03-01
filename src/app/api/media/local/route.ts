@@ -62,12 +62,20 @@ export async function GET(request: NextRequest) {
   let filePath: string;
 
   if (beeperParam) {
-    // ?beeper=localhostlocal-whatsapp/<mediaId>
-    // Maps to: ~/Library/Application Support/BeeperTexts/media/<platform>/<mediaId>
-    // e.g. localhostlocal-whatsapp/abc123 → media/whatsapp/abc123
+    // Supported formats:
+    //  - ?beeper=localhostlocal-whatsapp/<mediaId>  → media/whatsapp/<mediaId>
+    //  - ?beeper=local-whatsapp/<mediaId>           → media/local-whatsapp/<mediaId>
+    //  - ?beeper=local.beeper.com/<mediaId>         → media/local.beeper.com/<mediaId>
+    //  - ?beeper=local.beeper.com/<mediaId>         (from mxc://local.beeper.com/...)
     const decoded = decodeURIComponent(beeperParam);
-    // Strip "localhostlocal-" prefix to get platform/mediaId
-    const relative = decoded.replace(/^localhostlocal-/, '');
+    let relative: string;
+    if (decoded.startsWith('localhostlocal-')) {
+      // Old bridge format: strip prefix → platform/mediaId
+      relative = decoded.replace(/^localhostlocal-/, '');
+    } else {
+      // New format: server/mediaId used as-is (e.g. local.beeper.com/<id>, local-whatsapp/<id>)
+      relative = decoded;
+    }
     filePath = resolve(join(BEEPER_MEDIA_DIR, relative));
   } else if (pathParam) {
     // ?path=/absolute/path/to/file

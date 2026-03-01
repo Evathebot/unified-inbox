@@ -42,9 +42,15 @@ function convertMxcUrl(mxc: string): string {
   if (slashIdx === -1) return '';
   const server = withoutScheme.slice(0, slashIdx);
   const mediaId = withoutScheme.slice(slashIdx + 1);
-  // Local Beeper bridge media (localmxc://local-*) can't be served via the public
-  // Matrix API, so skip the proxy and let the caller fall through to initials.
-  if (server.startsWith('local-')) return '';
+
+  // Local Beeper bridge media (localmxc://local-* or mxc://local.beeper.com/*) —
+  // these can't be fetched from the public Matrix API. They are stored as local
+  // files in ~/Library/Application Support/BeeperTexts/media/. Serve via the
+  // local media proxy route using the server/mediaId as the relative path.
+  if (server.startsWith('local-') || server === 'local.beeper.com') {
+    return `/api/media/local?beeper=${encodeURIComponent(`${server}/${mediaId}`)}`;
+  }
+
   const matrixUrl = `https://matrix.beeper.com/_matrix/media/v3/thumbnail/${server}/${mediaId}?width=96&height=96&method=crop`;
   return `/api/media/proxy?url=${encodeURIComponent(matrixUrl)}`;
 }
@@ -53,10 +59,16 @@ function resolveImageSrc(src: string): string | null {
   if (!src) return null;
   if (src.startsWith('mxc://') || src.startsWith('localmxc://')) {
     const url = convertMxcUrl(src);
-    return url || null; // empty string → local bridge media → show initials
+    return url || null; // empty string → show initials
   }
   if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('/')) return src;
-  // file:// paths and emoji/plain strings — not a loadable URL; show initials
+  // file:// absolute paths — Beeper stores contact avatars this way.
+  // Convert to the local media proxy so the browser can load them.
+  if (src.startsWith('file:///')) {
+    const decodedPath = decodeURIComponent(src.replace('file://', ''));
+    return `/api/media/local?path=${encodeURIComponent(decodedPath)}`;
+  }
+  // Emoji/plain strings — not a loadable URL; show initials
   return null;
 }
 

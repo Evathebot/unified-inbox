@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Phone, Video, MoreHorizontal, SmilePlus, Forward, Copy, Check, X } from 'lucide-react';
+import { Phone, Video, MoreHorizontal, SmilePlus, Forward, Copy, Check, X, Pencil } from 'lucide-react';
 import Avatar from '@/components/Avatar';
 import ChannelBadge from '@/components/ChannelBadge';
 import ChannelContextBadge from '@/components/ChannelContextBadge';
@@ -31,6 +31,7 @@ import ReplyToolbar from './ReplyToolbar';
  */
 interface ConversationDetailProps {
   group: ConversationGroup;
+  onRename?: (newName: string) => void;
 }
 
 function formatTime(date: Date): string {
@@ -289,7 +290,7 @@ function ThreadPanel({ parentMsg, onClose }: ThreadPanelProps) {
 
 // ── Main component ───────────────────────────────────────────────────────────
 
-export default function ConversationDetail({ group }: ConversationDetailProps) {
+export default function ConversationDetail({ group, onRename }: ConversationDetailProps) {
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
   const [aiDraft, setAiDraft] = useState<string>('');
   const [draftLoading, setDraftLoading] = useState(true);
@@ -297,8 +298,11 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
   const [reactions, setReactions] = useState<MessageReactions>({});
   const [forwardToast, setForwardToast] = useState<string | null>(null);
   const [selectedThread, setSelectedThread] = useState<Message | null>(null);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
 
   const threadBottomRef = useRef<HTMLDivElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
   // Use conversationId as the stable key when available, otherwise fall back to sender+channel
   const conversationKey = group.conversationId ?? `${group.senderName}|${group.channel}`;
   const currentKeyRef = useRef(conversationKey);
@@ -311,6 +315,7 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
     setAiDraftDismissed(false);
     setReactions({});
     setSelectedThread(null);
+    setIsEditingName(false);
 
     // Snap to the bottom of the conversation immediately (instant, not animated)
     requestAnimationFrame(() => {
@@ -476,6 +481,21 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
     setTimeout(() => setForwardToast(null), 2500);
   };
 
+  const handleStartRename = () => {
+    setNameInput(group.senderName);
+    setIsEditingName(true);
+    // Focus and select the input on the next frame after it mounts
+    requestAnimationFrame(() => nameInputRef.current?.select());
+  };
+
+  const handleConfirmRename = () => {
+    const trimmed = nameInput.trim();
+    if (trimmed && trimmed !== group.senderName) {
+      onRename?.(trimmed);
+    }
+    setIsEditingName(false);
+  };
+
   const channelLabel = group.channel === 'gmail' ? 'Gmail'
     : group.channel === 'whatsapp' ? 'WhatsApp'
     : group.channel === 'telegram' ? 'Telegram'
@@ -496,7 +516,48 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
           <Avatar src={group.senderAvatar} name={group.senderName} size="md" online={group.senderOnline} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-gray-900 truncate">{group.senderName}</h2>
+              {isEditingName ? (
+                <>
+                  <input
+                    ref={nameInputRef}
+                    value={nameInput}
+                    onChange={e => setNameInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleConfirmRename();
+                      if (e.key === 'Escape') setIsEditingName(false);
+                    }}
+                    className="text-sm font-semibold text-gray-900 border-b border-gray-400 focus:outline-none bg-transparent w-40 dark:text-gray-100 dark:border-gray-500"
+                    autoFocus
+                  />
+                  <button
+                    onClick={handleConfirmRename}
+                    className="text-green-500 hover:text-green-600 transition-colors"
+                    title="Confirm rename"
+                  >
+                    <Check size={14} />
+                  </button>
+                  <button
+                    onClick={() => setIsEditingName(false)}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Cancel"
+                  >
+                    <X size={14} />
+                  </button>
+                </>
+              ) : (
+                <div className="flex items-center gap-1 group/rename">
+                  <h2 className="text-sm font-semibold text-gray-900 truncate dark:text-gray-100">{group.senderName}</h2>
+                  {onRename && (
+                    <button
+                      onClick={handleStartRename}
+                      className="opacity-0 group-hover/rename:opacity-100 transition-opacity text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0"
+                      title="Rename conversation"
+                    >
+                      <Pencil size={11} />
+                    </button>
+                  )}
+                </div>
+              )}
               <ChannelBadge channel={group.channel} size="sm" />
             </div>
             {group.channelContext && !group.channelContext.isDM ? (
