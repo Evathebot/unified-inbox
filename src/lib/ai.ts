@@ -95,20 +95,41 @@ export async function generateDraftReply(
 
   // Sanitize raw Beeper bodies for the AI prompt:
   // 1. Decode JSON-wrapped format: {"text":"...","textEntities":[...]}
-  // 2. Replace the [text] media-only placeholder with a readable label
-  //    (must happen AFTER JSON decoding, because the inner text may also be [text])
-  const sanitizeBodyForAI = (body: string | null | undefined): string => {
+  //    (must happen BEFORE other checks — inner text may also be [text])
+  // 2. Replace media-only placeholders: [text], [image], [voice], [video], [file]
+  // 3. Replace raw media URLs stored as body (mxc://, /api/media/, localhost matrix)
+  //    The sync engine stores attachmentUrl as the body when there is no text caption.
+  const sanitizeBodyForAI = (body: string | null | undefined, msgType?: string | null): string => {
     if (!body) return '';
     let text = body.trim();
-    // Decode Beeper JSON-wrapped bodies first
+    // 1. Decode Beeper JSON-wrapped bodies first
     if (text.startsWith('{')) {
       try {
         const parsed = JSON.parse(text);
         if (typeof parsed?.text === 'string') text = parsed.text.trim();
       } catch { /* not valid JSON */ }
     }
-    // Replace media-only placeholder (works both on raw '[text]' and JSON-decoded '[text]')
-    if (text === '[text]') return '[media attachment]';
+    // 2. Replace media-only placeholders (raw or JSON-decoded)
+    if (text === '[text]') {
+      // Beeper's generic media placeholder — use msgType for a more specific label
+      if (msgType === 'image') return '[📷 photo]';
+      if (msgType === 'voice') return '[🎤 voice note]';
+      if (msgType === 'video') return '[🎥 video]';
+      if (msgType === 'file')  return '[📎 file]';
+      return '[media attachment]';
+    }
+    if (text === '[image]') return '[📷 photo]';
+    if (text === '[voice]') return '[🎤 voice note]';
+    if (text === '[video]') return '[🎥 video]';
+    if (text === '[file]')  return '[📎 file]';
+    // 3. Replace raw media URLs stored as body when there is no text caption
+    if (text.startsWith('mxc://') || text.startsWith('/api/media/') || text.startsWith('http://localhost:')) {
+      if (msgType === 'image') return '[📷 photo]';
+      if (msgType === 'voice') return '[🎤 voice note]';
+      if (msgType === 'video') return '[🎥 video]';
+      if (msgType === 'file')  return '[📎 file]';
+      return '[media attachment]';
+    }
     return text;
   };
 
@@ -117,7 +138,7 @@ export async function generateDraftReply(
     .slice(-10)
     .map(m => {
       const isMe = m.senderId !== message.senderId;
-      return `${isMe ? 'Me' : senderName}: ${sanitizeBodyForAI(m.body).substring(0, 300)}`;
+      return `${isMe ? 'Me' : senderName}: ${sanitizeBodyForAI(m.body, m.messageType).substring(0, 300)}`;
     })
     .filter(line => !line.endsWith(': ')) // skip blank entries
     .join('\n');
@@ -133,13 +154,18 @@ export async function generateDraftReply(
   };
   const channelStyle = platformInstruction[channel] || `${channel} chat message (natural tone). No em dashes.`;
 
-  const sanitizedMessageBody = sanitizeBodyForAI(message.body).substring(0, 500);
+  const sanitizedMessageBody = sanitizeBodyForAI(message.body, message.messageType).substring(0, 500);
+
+  // Detect when the entire message is a media attachment label (e.g. "[📷 photo]")
+  // so we can instruct the AI to reply warmly rather than saying "message didn't come through".
+  const isMediaOnly = /^\[.+\]$/.test(sanitizedMessageBody);
 
   const prompt = `
     Draft a reply to this ${channel} message from ${senderName}.
 
     ${context ? `Conversation history:\n${context}\n\n` : ''}Message to reply to (from ${senderName}):
     "${sanitizedMessageBody}"
+    ${isMediaOnly ? `\n    Note: "${sanitizedMessageBody}" means ${senderName} shared a media file (photo, video, voice note, or attachment). Draft a warm, natural reply that acknowledges the shared media. Do NOT say you cannot see it, do NOT say "message didn't come through" — just reply as if you received it normally.` : ''}
 
     Tone instruction: ${toneInstruction}
     Channel style: ${channelStyle}
