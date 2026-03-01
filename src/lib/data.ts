@@ -253,6 +253,26 @@ function transformMessage(dbMessage: any, conv?: { id: string; title: string; ty
   });
 
 
+  // Build a human-friendly list preview.
+  // For media attachments the body is a proxy URL — show an emoji label instead.
+  const isMediaUrl =
+    displayBody.startsWith('/api/media/') ||
+    displayBody.startsWith('http://') ||
+    displayBody.startsWith('https://');
+  const friendlyPreview = isMediaUrl
+    ? resolvedMessageType === 'voice'
+      ? '🎤 Voice note'
+      : resolvedMessageType === 'video'
+      ? '🎥 Video'
+      : resolvedMessageType === 'image'
+      ? '📷 Photo'
+      : resolvedMessageType === 'file'
+      ? '📎 File'
+      : '📎 Attachment'
+    : displayBody.length > 150
+    ? displayBody.substring(0, 150) + '…'
+    : displayBody;
+
   return {
     id: dbMessage.id,
     channel: dbMessage.channel as any,
@@ -263,8 +283,8 @@ function transformMessage(dbMessage: any, conv?: { id: string; title: string; ty
       online: false,
     },
     subject: dbMessage.subject || undefined,
-    // preview: ≤150 chars for list rows; body: full text for detail view
-    preview: displayBody.length > 150 ? displayBody.substring(0, 150) + '…' : displayBody,
+    // preview: ≤150 chars for list rows; body: full URL/text for detail view
+    preview: friendlyPreview,
     body: displayBody,
     externalId: conv?.externalId ?? undefined,
     timestamp: new Date(dbMessage.timestamp),

@@ -47,21 +47,43 @@ function BeeperCallbackContent() {
         // Load OAuth params stored by the settings page before the redirect.
         // We use localStorage (not sessionStorage) so the data is accessible
         // even if Beeper Desktop opens the callback URL in a new browser tab.
+        // If localStorage is empty (e.g. Beeper opened the callback in a
+        // different browser than the one that started the flow), fall back to
+        // fetching the PKCE params from the server using the `state` param.
+        let codeVerifier: string;
+        let clientId: string;
+        let apiUrl: string;
+        let redirectUri: string;
+
         const stored = localStorage.getItem('beeper_oauth');
-        if (!stored) {
-          router.push('/settings?beeper_error=no_code_verifier');
-          return;
+        if (stored) {
+          ({ codeVerifier, clientId, apiUrl, redirectUri } = JSON.parse(stored) as {
+            codeVerifier: string;
+            clientId: string;
+            apiUrl: string;
+            redirectUri: string;
+          });
+          // One-time use — clear immediately
+          localStorage.removeItem('beeper_oauth');
+        } else {
+          // Fallback: retrieve stored PKCE params from server
+          setMessage('Retrieving connection parameters from server…');
+          const pkceRes = await fetch(`/api/beeper/pkce?state=${encodeURIComponent(state!)}`);
+          if (!pkceRes.ok) {
+            router.push('/settings?beeper_error=no_code_verifier');
+            return;
+          }
+          const pkceData = await pkceRes.json() as {
+            codeVerifier: string;
+            clientId: string;
+            apiUrl: string;
+          };
+          codeVerifier = pkceData.codeVerifier;
+          clientId = pkceData.clientId;
+          apiUrl = pkceData.apiUrl;
+          // Derive redirect URI from the current origin
+          redirectUri = `${window.location.origin}/beeper/callback`;
         }
-
-        const { codeVerifier, clientId, apiUrl, redirectUri } = JSON.parse(stored) as {
-          codeVerifier: string;
-          clientId: string;
-          apiUrl: string;
-          redirectUri: string;
-        };
-
-        // One-time use — clear immediately
-        localStorage.removeItem('beeper_oauth');
 
         setMessage('Exchanging authorization code with Beeper Desktop…');
 

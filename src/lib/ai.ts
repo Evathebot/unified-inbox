@@ -93,13 +93,30 @@ export async function generateDraftReply(
   const senderName = message.contact?.name || message.senderName || 'them';
   const channel = message.channel || 'message';
 
+  // Sanitize raw Beeper bodies for the AI prompt:
+  // - Decode JSON-wrapped format: {"text":"...","textEntities":[...]}
+  // - Replace the [text] media-only placeholder with a readable label
+  const sanitizeBodyForAI = (body: string | null | undefined): string => {
+    if (!body) return '';
+    const trimmed = body.trim();
+    if (trimmed === '[text]') return '[media attachment]';
+    if (trimmed.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (typeof parsed?.text === 'string') return parsed.text;
+      } catch { /* not valid JSON */ }
+    }
+    return body;
+  };
+
   // Build conversation context with real sender names
   const context = conversationMessages
     .slice(-10)
     .map(m => {
       const isMe = m.senderId !== message.senderId;
-      return `${isMe ? 'Me' : senderName}: ${m.body?.substring(0, 300) || ''}`;
+      return `${isMe ? 'Me' : senderName}: ${sanitizeBodyForAI(m.body).substring(0, 300)}`;
     })
+    .filter(line => !line.endsWith(': ')) // skip blank entries
     .join('\n');
 
   const toneInstruction = TONE_INSTRUCTIONS[tone];
@@ -113,11 +130,13 @@ export async function generateDraftReply(
   };
   const channelStyle = platformInstruction[channel] || `${channel} chat message (natural tone). No em dashes.`;
 
+  const sanitizedMessageBody = sanitizeBodyForAI(message.body).substring(0, 500);
+
   const prompt = `
     Draft a reply to this ${channel} message from ${senderName}.
 
     ${context ? `Conversation history:\n${context}\n\n` : ''}Message to reply to (from ${senderName}):
-    "${message.body?.substring(0, 500) || ''}"
+    "${sanitizedMessageBody}"
 
     Tone instruction: ${toneInstruction}
     Channel style: ${channelStyle}
