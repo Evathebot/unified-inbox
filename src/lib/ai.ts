@@ -123,7 +123,14 @@ export async function generateDraftReply(
     if (text === '[video]') return '[🎥 video]';
     if (text === '[file]')  return '[📎 file]';
     // 3. Replace raw media URLs stored as body when there is no text caption
-    if (text.startsWith('mxc://') || text.startsWith('/api/media/') || text.startsWith('http://localhost:')) {
+    //    Covers: mxc://, localmxc:// (Beeper local), /api/media/, http://localhost:, file:///
+    if (
+      text.startsWith('mxc://') ||
+      text.startsWith('localmxc://') ||
+      text.startsWith('/api/media/') ||
+      text.startsWith('http://localhost:') ||
+      text.startsWith('file:///')
+    ) {
       if (msgType === 'image') return '[📷 photo]';
       if (msgType === 'voice') return '[🎤 voice note]';
       if (msgType === 'video') return '[🎥 video]';
