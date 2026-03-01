@@ -67,16 +67,11 @@ export async function GET(request: NextRequest) {
     //  - ?beeper=local-whatsapp/<mediaId>           → media/local-whatsapp/<mediaId>
     //  - ?beeper=local.beeper.com/<mediaId>         → media/local.beeper.com/<mediaId>
     //  - ?beeper=local.beeper.com/<mediaId>         (from mxc://local.beeper.com/...)
+    // Use the decoded beeper param as-is — Beeper stores files with the full
+    // directory name (e.g. localhostlocal-whatsapp/<mediaId>), so do not strip
+    // any prefix. The param already encodes the relative path under BEEPER_MEDIA_DIR.
     const decoded = decodeURIComponent(beeperParam);
-    let relative: string;
-    if (decoded.startsWith('localhostlocal-')) {
-      // Old bridge format: strip prefix → platform/mediaId
-      relative = decoded.replace(/^localhostlocal-/, '');
-    } else {
-      // New format: server/mediaId used as-is (e.g. local.beeper.com/<id>, local-whatsapp/<id>)
-      relative = decoded;
-    }
-    filePath = resolve(join(BEEPER_MEDIA_DIR, relative));
+    filePath = resolve(join(BEEPER_MEDIA_DIR, decoded));
   } else if (pathParam) {
     // ?path=/absolute/path/to/file
     filePath = resolve(decodeURIComponent(pathParam));

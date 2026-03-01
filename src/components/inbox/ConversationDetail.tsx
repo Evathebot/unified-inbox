@@ -79,18 +79,29 @@ function convertMxcUrl(mxc: string): string {
 
 function isImageUrl(text: string, messageType?: string): boolean {
   const trimmed = text.trim();
-  // Explicit type from DB
-  if (messageType === 'image') return true;
-  if (messageType && messageType !== 'text' && messageType !== 'image') return false;
+  // A body is a renderable media URL if it's a local proxy or a Matrix URL
+  const isMediaUrl =
+    trimmed.startsWith('/api/media/') ||
+    trimmed.startsWith('mxc://') ||
+    trimmed.startsWith('localmxc://');
+
+  // Explicit image type from DB — but only render as <img> when the body is
+  // actually a media URL. WhatsApp images with captions store the caption text
+  // as the body (the image URL goes to the Attachment table), so we must not
+  // blindly treat every messageType=image message as a renderable image.
+  if (messageType === 'image') return isMediaUrl;
+  if (messageType && messageType !== 'text') return false;
+
   if (trimmed.startsWith('mxc://') || trimmed.startsWith('localmxc://')) {
-    // Only treat as image if it's not a local bridge URL (those can't load)
+    // Only treat as image if it's not a raw local-bridge URL (those require the proxy)
     const withoutScheme = trimmed.startsWith('localmxc://') ? trimmed.slice('localmxc://'.length) : trimmed.slice('mxc://'.length);
     const server = withoutScheme.split('/')[0];
     if (server.startsWith('local-')) return false;
     return true;
   }
-  // Local media proxy — check extension if present
-  if (trimmed.startsWith('/api/media/local')) {
+  // Local media proxy — allow any file when messageType drove us here (checked
+  // above); for heuristic detection also accept known image extensions.
+  if (trimmed.startsWith('/api/media/')) {
     return /\.(jpg|jpeg|png|gif|webp|heic|heif)(\?|$)/i.test(trimmed);
   }
   return /^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(trimmed);
