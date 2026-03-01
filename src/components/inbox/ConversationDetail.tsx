@@ -523,7 +523,7 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
 
         {/* ── AI Summary Banner ─────────────────────────────── */}
         {!summaryDismissed && (summaryLoading || aiSummary) && (
-          <div className="px-4 py-2.5 bg-gradient-to-r from-purple-50 via-pink-50 to-orange-50 border-b border-purple-100 flex items-start gap-2.5 shrink-0">
+          <div className="px-4 py-2.5 ai-gradient-banner border-b flex items-start gap-2.5 shrink-0">
             <div className="ai-orb relative shrink-0 mt-0.5" style={{ width: 14, height: 14 }}>
               <div className="ai-orb-glow"></div>
             </div>

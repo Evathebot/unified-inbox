@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Force Tailwind dark: variants to use .dark class strategy (not prefers-color-scheme) */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #111827;
@@ -50,6 +53,44 @@ html.dark .text-gray-400 { color: #475569 !important; }
 
 /* Message bubbles in dark mode */
 html.dark .bg-\[\#0b5cff\] { background-color: #1d4ed8 !important; }
+
+/* Purple AI accents */
+html.dark .bg-purple-50 { background-color: #1e1b4b !important; }
+html.dark .bg-purple-100 { background-color: #2e2860 !important; }
+html.dark .text-purple-700 { color: #a78bfa !important; }
+html.dark .text-purple-600 { color: #c4b5fd !important; }
+html.dark .text-purple-400 { color: #7c3aed !important; }
+html.dark .border-purple-100 { border-color: #3730a3 !important; }
+html.dark .border-purple-200 { border-color: #4338ca !important; }
+html.dark .hover\:bg-purple-50:hover { background-color: #1e1b4b !important; }
+html.dark .hover\:bg-purple-100:hover { background-color: #2e2860 !important; }
+html.dark .hover\:border-purple-200:hover { border-color: #4338ca !important; }
+html.dark .hover\:text-purple-600:hover { color: #c4b5fd !important; }
+
+/* Green AI accents */
+html.dark .bg-green-50 { background-color: #052e16 !important; }
+html.dark .bg-green-500 { background-color: #16a34a !important; }
+html.dark .hover\:bg-green-100:hover { background-color: #14532d !important; }
+html.dark .text-green-500 { color: #4ade80 !important; }
+
+/* Additional gray overrides for AI components */
+html.dark .text-gray-300 { color: #475569 !important; }
+html.dark .border-gray-300 { border-color: #334155 !important; }
+html.dark .group-hover\:border-gray-400:hover { border-color: #475569 !important; }
+html.dark .hover\:bg-gray-50:hover { background-color: #1e293b !important; }
+html.dark .hover\:bg-gray-100:hover { background-color: #334155 !important; }
+html.dark .hover\:bg-gray-200:hover { background-color: #475569 !important; }
+html.dark .hover\:bg-gray-800:hover { background-color: #0f172a !important; }
+
+/* AI gradient banner — used in BriefingAISummary + ConversationDetail AI summary strip */
+.ai-gradient-banner {
+  background: linear-gradient(to right, #faf5ff, #fdf2f8, #fff7ed) !important;
+  border-color: #e9d5ff !important;
+}
+html.dark .ai-gradient-banner {
+  background: rgba(30, 27, 75, 0.5) !important;
+  border-color: #3730a3 !important;
+}
 
 /* Scrollbar in dark mode */
 html.dark ::-webkit-scrollbar-thumb { background: #334155; }
@@ -139,6 +180,10 @@ html.dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
   inset: 3px;
   border-radius: 50%;
   background: white;
+}
+
+html.dark .ai-orb::after {
+  background: #1e293b;
 }
 
 .ai-orb-glow {

@@ -53,7 +53,7 @@ export default function BriefingAISummary({
 
   if (loading) {
     return (
-      <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 via-pink-50 to-orange-50 border border-purple-100 rounded-2xl">
+      <div className="mb-6 p-4 ai-gradient-banner border rounded-2xl">
         <div className="flex items-center gap-3 mb-2">
           <div className="ai-orb relative shrink-0" style={{ width: 16, height: 16 }}>
             <div className="ai-orb-glow" />
@@ -72,7 +72,7 @@ export default function BriefingAISummary({
   if (!summary) {
     // Fallback static summary if AI failed
     return (
-      <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 via-pink-50 to-orange-50 border border-purple-100 rounded-2xl flex items-center gap-3">
+      <div className="mb-6 p-4 ai-gradient-banner border rounded-2xl flex items-center gap-3">
         <div className="ai-orb relative shrink-0" style={{ width: 20, height: 20 }}>
           <div className="ai-orb-glow" />
         </div>
@@ -100,7 +100,7 @@ export default function BriefingAISummary({
   }
 
   return (
-    <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 via-pink-50 to-orange-50 border border-purple-100 rounded-2xl">
+    <div className="mb-6 p-4 ai-gradient-banner border rounded-2xl">
       <div className="flex items-start gap-3">
         <div className="ai-orb relative shrink-0 mt-0.5" style={{ width: 16, height: 16 }}>
           <div className="ai-orb-glow" />
