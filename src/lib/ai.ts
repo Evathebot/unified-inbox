@@ -104,6 +104,15 @@ export async function generateDraftReply(
 
   const toneInstruction = TONE_INSTRUCTIONS[tone];
 
+  // Platform-specific length and style guidance
+  const platformInstruction: Record<string, string> = {
+    whatsapp: 'WhatsApp message: be casual and brief (1-3 sentences max). Texting style. No em dashes.',
+    telegram: 'Telegram: casual and direct. No em dashes.',
+    slack: 'Slack: professional but conversational. You may use emoji. No em dashes.',
+    gmail: 'Email: structured with clear paragraphs. No em dashes.',
+  };
+  const channelStyle = platformInstruction[channel] || `${channel} chat message (natural tone). No em dashes.`;
+
   const prompt = `
     Draft a reply to this ${channel} message from ${senderName}.
 
@@ -111,17 +120,18 @@ export async function generateDraftReply(
     "${message.body?.substring(0, 500) || ''}"
 
     Tone instruction: ${toneInstruction}
+    Channel style: ${channelStyle}
 
     Rules:
     - Respond ONLY with the reply text itself
     - Do NOT include subject lines, labels, or preamble like "Here is a draft"
     - Do NOT start with "Hi [name]," or any greeting unless the tone is formal
-    - Match the channel style: ${channel === 'slack' ? 'Slack message (conversational, possibly use emoji)' : channel === 'gmail' ? 'Email (more structured)' : 'chat message (natural)'}
+    - NEVER use em dashes (—). Use commas or periods instead.
   `;
 
   try {
     const draft = await generateCompletion(prompt, {
-      system: `You are a helpful assistant drafting replies for a busy professional. ${toneInstruction} Never write preamble — output ONLY the reply text.`,
+      system: `You are a helpful assistant drafting replies for a busy professional. ${toneInstruction} Never write preamble — output ONLY the reply text. NEVER use em dashes (—) — use commas or periods instead.`,
     });
     return draft.trim();
   } catch (error) {

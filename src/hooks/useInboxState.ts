@@ -86,7 +86,9 @@ export function useInboxState(initialMessages: Message[]) {
 
   const isMessageRead = (msg: Message) => !msg.unread || readMessages.has(msg.id);
 
-  const unreadCount = initialMessages.filter((m) => !isMessageRead(m)).length;
+  // Exclude self-sent messages from the unread count — outgoing messages
+  // stored in the DB as read:false would otherwise inflate the badge.
+  const unreadCount = initialMessages.filter((m) => m.sender.name !== 'Me' && !isMessageRead(m)).length;
 
   // Broadcast unread count to sidebar whenever it changes
   useEffect(() => {
@@ -202,11 +204,15 @@ export function useInboxState(initialMessages: Message[]) {
       }
     });
 
-    if (sortBy === 'priority') {
-      groups.sort((a, b) => b.highestPriority - a.highestPriority);
-    } else {
-      groups.sort((a, b) => b.latestTimestamp.getTime() - a.latestTimestamp.getTime());
-    }
+    // Priority conversations (>= 70) always float to the top regardless of sort mode.
+    // Within each tier, sort by the user's chosen method.
+    groups.sort((a, b) => {
+      const aPri = a.highestPriority >= 70 ? 1 : 0;
+      const bPri = b.highestPriority >= 70 ? 1 : 0;
+      if (bPri !== aPri) return bPri - aPri;
+      if (sortBy === 'priority') return b.highestPriority - a.highestPriority;
+      return b.latestTimestamp.getTime() - a.latestTimestamp.getTime();
+    });
 
     return groups;
     // eslint-disable-next-line react-hooks/exhaustive-deps

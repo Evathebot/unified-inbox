@@ -144,7 +144,7 @@ export function formatContactName(name: string): string {
   return name;
 }
 
-function transformMessage(dbMessage: any, conv?: { id: string; title: string; type: string; externalId?: string | null; contactName?: string; contactAvatar?: string }): Message {
+function transformMessage(dbMessage: any, conv?: { id: string; title: string; type: string; externalId?: string | null; contactName?: string; contactAvatar?: string; selfParticipantId?: string }): Message {
   // Extract topic from AIMetadata
   let topicLabel: string | undefined;
   let topicColor: string | undefined;
@@ -191,16 +191,30 @@ function transformMessage(dbMessage: any, conv?: { id: string; title: string; ty
     }
   }
 
-  const rawSenderName = formatContactName(
+  // Detect if this message was sent by the current user (self-participant).
+  const isFromSelf = !!(conv?.selfParticipantId && dbMessage.senderId === conv.selfParticipantId);
+
+  const rawSenderName = isFromSelf ? 'Me' : formatContactName(
     dbMessage.contact?.displayName || dbMessage.contact?.name || dbMessage.senderName
   );
   // Decode Beeper JSON-wrapped bodies ({"text":"...","textEntities":[...]})
   const cleanBody = parseBeeperText(dbMessage.body, rawSenderName);
   const isSystemEvent = isBeeperSystemEvent(dbMessage.body ?? '', cleanBody);
 
-  // Replace local Beeper bridge media URLs (localmxc://) with human-readable placeholders.
-  // These URLs are only accessible on the local machine and look meaningless in the UI.
-  const displayBody = cleanBody.replace(/localmxc:\/\/[^\s,;"'<>)]+/gi, '[Media]');
+  // Convert localmxc:// local bridge media to local file proxy URLs so they can be
+  // displayed as images/audio in the browser (files live in ~/Library/Application Support/BeeperTexts/media/).
+  let displayBody = cleanBody.replace(/localmxc:\/\/(local-[^\/\s,;"'<>)]+)\/([^\s,;"'<>)]+)/gi, (_, platform, mediaId) => {
+    const beeperPlatform = platform.replace('local-', '');
+    const beeperPath = `localhostlocal-${beeperPlatform}/${mediaId}`;
+    return `/api/media/local?beeper=${encodeURIComponent(beeperPath)}`;
+  });
+  // Fallback: any remaining localmxc:// that didn't match the pattern above
+  displayBody = displayBody.replace(/localmxc:\/\/[^\s,;"'<>)]+/gi, '[Media]');
+  // Convert file:// absolute paths (Beeper stores local media as file:// URIs) to proxy URLs
+  displayBody = displayBody.replace(/file:\/\/\/([^\s"'<>)]+)/gi, (_, encodedPath) => {
+    const decodedPath = decodeURIComponent(encodedPath);
+    return `/api/media/local?path=${encodeURIComponent(`/${decodedPath}`)}`;
+  });
 
 
   return {
@@ -219,12 +233,13 @@ function transformMessage(dbMessage: any, conv?: { id: string; title: string; ty
     externalId: conv?.externalId ?? undefined,
     timestamp: new Date(dbMessage.timestamp),
     priority: dbMessage.priority,
-    unread: !dbMessage.read,
+    unread: isFromSelf ? false : !dbMessage.read,
     answered: false, // tracked per-conversation, not per-message
     account: 'work' as const,
     topicLabel,
     topicColor,
     hasAIDraft: !!dbMessage.aiDraft || !!dbMessage.aiMetadata?.draftReply,
+    messageType: dbMessage.messageType || 'text',
     thread: dbMessage.thread
       ? {
         messages: dbMessage.thread.map((m: any) => ({
@@ -373,6 +388,12 @@ export async function getMessages(filters?: {
         // Include the conversation's own contact so we always have a display name
         // even for DMs where all fetched messages were sent by the current user.
         contact: { select: { id: true, name: true, displayName: true, avatar: true } },
+        // Include the self-participant so we can detect outgoing messages (sender.name = 'Me').
+        participants: {
+          where: { isSelf: true },
+          select: { externalUserId: true },
+          take: 1,
+        },
         messages: {
           where: Object.keys(msgWhere).length > 0 ? msgWhere : undefined,
           orderBy: { timestamp: 'desc' },
@@ -389,6 +410,8 @@ export async function getMessages(filters?: {
     const allMessages = conversations.flatMap(conv => {
       const contactName = conv.contact?.displayName || conv.contact?.name || undefined;
       const contactAvatar = conv.contact?.avatar || undefined;
+      // The isSelf participant's externalUserId is the "me" sender ID for this conversation
+      const selfParticipantId = (conv as any).participants?.[0]?.externalUserId || undefined;
       return conv.messages.map(msg => transformMessage(msg, {
         id: conv.id,
         title: conv.title,
@@ -396,6 +419,7 @@ export async function getMessages(filters?: {
         externalId: conv.externalId,
         contactName,
         contactAvatar,
+        selfParticipantId,
       }));
     });
 

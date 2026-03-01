@@ -1,6 +1,6 @@
 'use client';
 
-import { SlidersHorizontal, Plus, Sparkles, Archive, CheckCheck, MessageSquare } from 'lucide-react';
+import { SlidersHorizontal, Plus, Archive, CheckCheck, MessageSquare } from 'lucide-react';
 import Avatar from '@/components/Avatar';
 import GroupAvatar from '@/components/GroupAvatar';
 import SearchBar from '@/components/SearchBar';
@@ -178,7 +178,6 @@ export default function ConversationList({
           const isSelected = selectedGroup?._groupKey === group._groupKey;
 
           const isPriority = group.highestPriority >= 70;
-          const priorityBorderColor = group.highestPriority >= 80 ? 'border-l-red-500' : 'border-l-orange-400';
 
           // AI signal badge — smart urgency/intent detection from preview + priority
           const latestIncoming = [...group.messages].reverse().find(m => m.sender.name !== 'Me');
@@ -198,8 +197,12 @@ export default function ConversationList({
                   : isUnread
                   ? 'hover:bg-gray-50'
                   : 'hover:bg-gray-50 opacity-75'
-              } ${isPriority ? `border-l-2 ${priorityBorderColor}` : ''}`}
+              }`}
             >
+              {/* Priority animated gradient left bar */}
+              {isPriority && !isSelected && (
+                <span className="absolute inset-y-0 left-0 w-0.5 ai-badge rounded-r" />
+              )}
               {/* Selected left accent */}
               {isSelected && (
                 <span className="absolute inset-y-0 left-0 w-0.5 bg-blue-500 rounded-r" />
@@ -291,19 +294,12 @@ export default function ConversationList({
                     </div>
                   )}
 
-                  {/* AI signal badge + AI draft badge */}
-                  {(aiSignal || group.hasAIDraft) && (
-                    <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                      {aiSignal && (
-                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${aiSignal.classes}`}>
-                          {aiSignal.label}
-                        </span>
-                      )}
-                      {group.hasAIDraft && (
-                        <span className="ai-badge text-[10px] font-semibold text-white px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                          <Sparkles size={9} /> AI draft ready
-                        </span>
-                      )}
+                  {/* AI signal badge */}
+                  {aiSignal && (
+                    <div className="mt-1">
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${aiSignal.classes}`}>
+                        {aiSignal.label}
+                      </span>
                     </div>
                   )}
                 </div>

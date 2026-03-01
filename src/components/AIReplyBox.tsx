@@ -56,26 +56,45 @@ export default function AIReplyBox({
 
   return (
     <div className="ai-border-gradient bg-white rounded-xl p-4 shadow-sm">
-      {/* Header with AI orb + tone selector */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2.5">
-          <div className="ai-orb relative">
-            <div className="ai-orb-glow"></div>
-          </div>
-          {loading ? (
-            <div className="flex items-center gap-2">
-              <span className="ai-text-gradient text-sm font-semibold">Auto drafting response</span>
-              <span className="flex gap-0.5">
-                <span className="typing-dot w-1 h-1 rounded-full bg-orange-400 inline-block"></span>
-                <span className="typing-dot w-1 h-1 rounded-full bg-pink-400 inline-block"></span>
-                <span className="typing-dot w-1 h-1 rounded-full bg-purple-400 inline-block"></span>
-              </span>
-            </div>
-          ) : (
-            <span className="ai-text-gradient text-sm font-semibold">AI Suggested Reply</span>
-          )}
+      {/* Header: AI orb + label + tone pills (all on one row) */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <div className="ai-orb relative">
+          <div className="ai-orb-glow"></div>
         </div>
-        <div className="flex items-center gap-2">
+        {loading ? (
+          <div className="flex items-center gap-2">
+            <span className="ai-text-gradient text-sm font-semibold">Auto drafting response</span>
+            <span className="flex gap-0.5">
+              <span className="typing-dot w-1 h-1 rounded-full bg-orange-400 inline-block"></span>
+              <span className="typing-dot w-1 h-1 rounded-full bg-pink-400 inline-block"></span>
+              <span className="typing-dot w-1 h-1 rounded-full bg-purple-400 inline-block"></span>
+            </span>
+          </div>
+        ) : (
+          <>
+            <span className="ai-text-gradient text-sm font-semibold">AI Suggested Reply</span>
+            {/* Tone pills — inline next to the label */}
+            <div className="flex items-center gap-0.5 ml-1">
+              {TONES.map(({ key, label, emoji }) => (
+                <button
+                  key={key}
+                  onClick={() => handleToneChange(key)}
+                  className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium transition-all ${
+                    activeTone === key
+                      ? 'bg-gradient-to-r from-purple-500 to-orange-500 text-white shadow-sm'
+                      : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                  }`}
+                  title={`Rewrite in ${label} tone`}
+                >
+                  <span>{emoji}</span>
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+        {/* Spacer + right-side controls */}
+        <div className="flex items-center gap-2 ml-auto">
           {!loading && onRegenerate && (
             <button
               onClick={() => onRegenerate(activeTone)}
@@ -97,28 +116,6 @@ export default function AIReplyBox({
           )}
         </div>
       </div>
-
-      {/* Tone selector — shown when not loading */}
-      {!loading && (
-        <div className="flex items-center gap-1.5 mb-3">
-          <span className="text-[10px] text-gray-400 uppercase tracking-wide font-medium mr-0.5">Tone</span>
-          {TONES.map(({ key, label, emoji }) => (
-            <button
-              key={key}
-              onClick={() => handleToneChange(key)}
-              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium transition-all ${
-                activeTone === key
-                  ? 'bg-gradient-to-r from-purple-500 to-orange-500 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-              }`}
-              title={`Rewrite in ${label} tone`}
-            >
-              <span>{emoji}</span>
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* Reply content */}
       {loading ? (

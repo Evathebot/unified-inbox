@@ -9,7 +9,6 @@ import AIReplyBox, { type DraftTone } from '@/components/AIReplyBox';
 import { getRelativeTime, Message } from '@/lib/mockData';
 import { ConversationGroup } from './types';
 import ReplyToolbar from './ReplyToolbar';
-import QuickReplies from '@/components/QuickReplies';
 
 /**
  * Detail panel for the selected conversation group (right two-thirds of the inbox).
@@ -77,8 +76,11 @@ function convertMxcUrl(mxc: string): string {
   return `/api/media/proxy?url=${encodeURIComponent(matrixUrl)}`;
 }
 
-function isImageUrl(text: string): boolean {
+function isImageUrl(text: string, messageType?: string): boolean {
   const trimmed = text.trim();
+  // Explicit type from DB
+  if (messageType === 'image') return true;
+  if (messageType && messageType !== 'text' && messageType !== 'image') return false;
   if (trimmed.startsWith('mxc://') || trimmed.startsWith('localmxc://')) {
     // Only treat as image if it's not a local bridge URL (those can't load)
     const withoutScheme = trimmed.startsWith('localmxc://') ? trimmed.slice('localmxc://'.length) : trimmed.slice('mxc://'.length);
@@ -86,11 +88,26 @@ function isImageUrl(text: string): boolean {
     if (server.startsWith('local-')) return false;
     return true;
   }
+  // Local media proxy — check extension if present
+  if (trimmed.startsWith('/api/media/local')) {
+    return /\.(jpg|jpeg|png|gif|webp|heic|heif)(\?|$)/i.test(trimmed);
+  }
   return /^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(trimmed);
+}
+
+function isVoiceUrl(text: string, messageType?: string): boolean {
+  if (messageType === 'voice' || messageType === 'audio') return true;
+  const trimmed = text.trim();
+  if (trimmed.startsWith('/api/media/local')) {
+    return /\.(ogg|oga|opus|m4a|mp3|wav|aac|caf)(\?|$)/i.test(trimmed);
+  }
+  return false;
 }
 
 function resolveImageSrc(text: string): string {
   const trimmed = text.trim();
+  // Already a local proxy URL — pass through
+  if (trimmed.startsWith('/api/media/local')) return trimmed;
   if (trimmed.startsWith('mxc://') || trimmed.startsWith('localmxc://')) return convertMxcUrl(trimmed);
   return trimmed;
 }
@@ -274,9 +291,6 @@ function ThreadPanel({ parentMsg, onClose }: ThreadPanelProps) {
 
 export default function ConversationDetail({ group }: ConversationDetailProps) {
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
-  const [aiSummary, setAiSummary] = useState<string | null>(null);
-  const [summaryLoading, setSummaryLoading] = useState(true);
-  const [summaryDismissed, setSummaryDismissed] = useState(false);
   const [aiDraft, setAiDraft] = useState<string>('');
   const [draftLoading, setDraftLoading] = useState(true);
   const [aiDraftDismissed, setAiDraftDismissed] = useState(false);
@@ -288,13 +302,12 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
   // Use conversationId as the stable key when available, otherwise fall back to sender+channel
   const conversationKey = group.conversationId ?? `${group.senderName}|${group.channel}`;
   const currentKeyRef = useRef(conversationKey);
-  // Cache AI results so switching back to a conversation doesn't re-fire 2 API calls
-  const aiCacheRef = useRef<Map<string, { summary: string | null; draft: string }>>(new Map());
+  // Cache draft reply so switching back to a conversation doesn't re-fire the API call
+  const aiCacheRef = useRef<Map<string, { draft: string }>>(new Map());
 
   useEffect(() => {
     currentKeyRef.current = conversationKey;
     setLocalMessages([]);
-    setSummaryDismissed(false);
     setAiDraftDismissed(false);
     setReactions({});
     setSelectedThread(null);
@@ -305,43 +318,35 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
     });
 
     const key = conversationKey;
+    const latestMsg = group.messages[group.messages.length - 1];
+    // Use latestMsgId as cache key — if no new message has arrived, reuse existing draft
+    const draftStorageKey = latestMsg?.id ? `ai-draft:${latestMsg.id}` : null;
 
-    // If AI data is already cached for this conversation, restore it without fetching
+    // 1. Check in-session memory cache
     const cached = aiCacheRef.current.get(key);
     if (cached) {
-      setAiSummary(cached.summary);
-      setSummaryLoading(false);
       setAiDraft(cached.draft);
       setDraftLoading(false);
       return;
     }
 
-    // Fresh conversation — reset AI state and fetch
-    setAiSummary(null);
-    setSummaryLoading(true);
+    // 2. Check localStorage (persists across page refreshes)
+    if (draftStorageKey) {
+      try {
+        const stored = localStorage.getItem(draftStorageKey);
+        if (stored) {
+          setAiDraft(stored);
+          setDraftLoading(false);
+          aiCacheRef.current.set(key, { draft: stored });
+          return;
+        }
+      } catch { /* ignore storage errors */ }
+    }
+
+    // 3. Fresh conversation — fetch draft from AI
     setAiDraft('');
     setDraftLoading(true);
 
-    const messages = group.messages.map(m => ({ sender: m.sender.name, body: m.body ?? m.preview }));
-
-    fetch('/api/ai/summarize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages, contactName: group.senderName }),
-    })
-      .then(r => r.json())
-      .then(d => {
-        if (currentKeyRef.current !== key) return;
-        const summary = d.summary || null;
-        setAiSummary(summary);
-        setSummaryLoading(false);
-        // Merge into cache (draft may arrive later)
-        const existing = aiCacheRef.current.get(key);
-        aiCacheRef.current.set(key, { summary, draft: existing?.draft ?? '' });
-      })
-      .catch(() => { if (currentKeyRef.current !== key) return; setSummaryLoading(false); });
-
-    const latestMsg = group.messages[group.messages.length - 1];
     if (latestMsg?.id) {
       fetch('/api/ai/draft', {
         method: 'POST',
@@ -354,9 +359,11 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
           const draft = d.draft || '';
           setAiDraft(draft);
           setDraftLoading(false);
-          // Merge into cache (summary may arrive later)
-          const existing = aiCacheRef.current.get(key);
-          aiCacheRef.current.set(key, { summary: existing?.summary ?? null, draft });
+          aiCacheRef.current.set(key, { draft });
+          // Persist to localStorage so future page loads skip the fetch
+          if (draftStorageKey && draft) {
+            try { localStorage.setItem(draftStorageKey, draft); } catch { /* ignore */ }
+          }
         })
         .catch(() => {
           if (currentKeyRef.current !== key) return;
@@ -397,12 +404,14 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
   const handleRegenerateDraft = useCallback((tone: DraftTone = 'friendly') => {
     setAiDraft('');
     setDraftLoading(true);
-    // Invalidate cache entry for this conversation so next visit re-fetches
-    const existing = aiCacheRef.current.get(conversationKey);
-    if (existing) aiCacheRef.current.set(conversationKey, { ...existing, draft: '' });
+    // Invalidate both in-session cache and localStorage so next visit also re-fetches
+    aiCacheRef.current.delete(conversationKey);
 
     const latestMsg = group.messages[group.messages.length - 1];
     if (!latestMsg?.id) return;
+    // Clear localStorage entry so regenerated draft replaces the old one
+    try { localStorage.removeItem(`ai-draft:${latestMsg.id}`); } catch { /* ignore */ }
+
     fetch('/api/ai/draft', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -413,8 +422,10 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
         const draft = d.draft || '';
         setAiDraft(draft);
         setDraftLoading(false);
-        const ex = aiCacheRef.current.get(conversationKey);
-        aiCacheRef.current.set(conversationKey, { summary: ex?.summary ?? null, draft });
+        aiCacheRef.current.set(conversationKey, { draft });
+        if (draft) {
+          try { localStorage.setItem(`ai-draft:${latestMsg.id}`, draft); } catch { /* ignore */ }
+        }
       })
       .catch(() => { setAiDraft(''); setDraftLoading(false); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -521,35 +532,6 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
           </div>
         </div>
 
-        {/* ── AI Summary Banner ─────────────────────────────── */}
-        {!summaryDismissed && (summaryLoading || aiSummary) && (
-          <div className="px-4 py-2.5 ai-gradient-banner border-b flex items-start gap-2.5 shrink-0">
-            <div className="ai-orb relative shrink-0 mt-0.5" style={{ width: 14, height: 14 }}>
-              <div className="ai-orb-glow"></div>
-            </div>
-            {summaryLoading ? (
-              <div className="flex-1 space-y-1.5 py-0.5">
-                <div className="h-2.5 bg-purple-100 rounded animate-pulse w-full" />
-                <div className="h-2.5 bg-purple-100 rounded animate-pulse w-3/4" />
-              </div>
-            ) : (
-              <p className="flex-1 text-xs text-gray-600 leading-relaxed">
-                <span className="font-semibold ai-text-gradient">AI Summary · </span>
-                {aiSummary}
-              </p>
-            )}
-            {!summaryLoading && (
-              <button
-                onClick={() => setSummaryDismissed(true)}
-                className="shrink-0 text-gray-300 hover:text-gray-500 text-xs leading-none mt-0.5 transition-colors"
-                aria-label="Dismiss"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        )}
-
         {/* ── Chat thread ───────────────────────────────────── */}
         <div className={`flex-1 overflow-y-auto py-4 space-y-1 ${group.channel === 'slack' ? 'px-0 bg-white dark:bg-gray-900' : 'px-4 bg-[#f0f2f5] dark:bg-gray-800'}`}>
           {dayGroups.map(({ date, messages: dayMsgs }) => (
@@ -571,7 +553,9 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
                   const msgId = msg.id || String(idx);
                   // Use full body when available; fall back to (possibly truncated) preview
                   const msgBody = msg.body ?? msg.preview;
-                  const isImage = isImageUrl(msgBody);
+                  const isImage = isImageUrl(msgBody, msg.messageType);
+                  const isVoice = !isImage && isVoiceUrl(msgBody, msg.messageType);
+                  const isMedia = isImage || isVoice;
                   const threadCount = msg.thread?.messages?.length ?? 0;
                   const isThreadOpen = selectedThread?.id === msg.id;
 
@@ -637,6 +621,8 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
                               className="max-w-xs rounded-lg shadow-sm object-cover mt-1"
                               style={{ maxHeight: 280 }}
                             />
+                          ) : isVoice ? (
+                            <audio controls src={msgBody} className="mt-1 h-10 max-w-xs" />
                           ) : (
                             <p className="text-sm text-gray-800 leading-relaxed break-words whitespace-pre-wrap">{msgBody}</p>
                           )}
@@ -708,6 +694,8 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
                               className={`max-w-full rounded-2xl rounded-br-sm shadow-sm object-cover`}
                               style={{ maxHeight: 280 }}
                             />
+                          ) : isVoice ? (
+                            <audio controls src={msgBody} className="h-10 max-w-xs" />
                           ) : (
                             <div className={`
                               px-3.5 py-2.5 text-sm text-white leading-relaxed shadow-sm
@@ -786,6 +774,8 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
                             className="max-w-full rounded-2xl rounded-bl-sm shadow-sm object-cover"
                             style={{ maxHeight: 280 }}
                           />
+                        ) : isVoice ? (
+                          <audio controls src={msgBody} className="h-10 max-w-xs" />
                         ) : (
                           <div className={`
                             px-3.5 py-2.5 text-sm text-gray-800 leading-relaxed shadow-sm
@@ -846,29 +836,6 @@ export default function ConversationDetail({ group }: ConversationDetailProps) {
             />
           </div>
         )}
-
-        {/* ── Smart Quick Replies ────────────────────────────── */}
-        {(() => {
-          const latestIncoming = [...(group.messages || [])]
-            .reverse()
-            .find(m => m.sender.name !== 'Me');
-          return latestIncoming?.id ? (
-            <QuickReplies
-              messageId={latestIncoming.id}
-              conversationKey={conversationKey}
-              onSelect={(text) => {
-                addLocalMessage(text);
-                if (group.conversationId) {
-                  fetch('/api/conversations/send', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ conversationId: group.conversationId, text, channel: group.channel }),
-                  }).catch(() => {});
-                }
-              }}
-            />
-          ) : null;
-        })()}
 
         {/* ── Compose bar ───────────────────────────────────── */}
         <ReplyToolbar

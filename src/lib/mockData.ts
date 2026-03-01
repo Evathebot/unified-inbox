@@ -42,6 +42,8 @@ export interface Message {
   isGroupConversation?: boolean;
   /** Beeper system events: tapbacks, renames, group-photo changes, etc. */
   isSystemEvent?: boolean;
+  /** Message type: text, image, voice, file, video, system */
+  messageType?: string;
 }
 
 export interface Contact {

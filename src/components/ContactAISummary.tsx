@@ -152,17 +152,6 @@ export default function ContactAISummary({
           ))}
         </div>
       )}
-      {analysis.relationshipStrength > 0 && (
-        <div className="flex items-center justify-end gap-1 mb-2">
-          <div className="flex-1 max-w-[80px] h-1 bg-gray-100 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-purple-400 to-orange-400 rounded-full"
-              style={{ width: `${analysis.relationshipStrength}%` }}
-            />
-          </div>
-          <span className="text-[10px] text-gray-400">{analysis.relationshipStrength}%</span>
-        </div>
-      )}
       <button
         onClick={generateSummary}
         className="text-[10px] text-purple-400 hover:text-purple-600 transition-colors flex items-center gap-1 ml-auto"
